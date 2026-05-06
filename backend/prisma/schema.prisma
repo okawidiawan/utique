@@ -1,0 +1,295 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// Enum: Role pengguna (CUSTOMER atau ADMIN)
+// ==========================================
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+// ==========================================
+// Enum: Status pesanan
+// ==========================================
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  IN_QUEUE
+  IN_PRODUCTION
+  DONE
+  SHIPPED
+  COMPLETED
+  CANCELLED
+}
+
+// ==========================================
+// Enum: Status pembayaran
+// ==========================================
+enum PaymentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+// ==========================================
+// Model: User — Data pengguna (customer & admin)
+// ==========================================
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(100)
+  email     String   @unique @db.VarChar(100)
+  password  String   @db.VarChar(255)
+  phone     String?  @db.VarChar(20)
+  role      Role     @default(CUSTOMER)
+  token     String?  @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  addresses Address[]
+  orders    Order[]
+  reviews   Review[]
+  cart      Cart?
+
+  @@map("users")
+}
+
+// ==========================================
+// Model: Address — Alamat pengiriman milik user
+// ==========================================
+model Address {
+  id            Int      @id @default(autoincrement())
+  userId        Int      @map("user_id")
+  label         String   @db.VarChar(50) // Rumah, Kantor, dll
+  recipientName String   @map("recipient_name") @db.VarChar(100)
+  phone         String   @db.VarChar(20)
+  province      String   @db.VarChar(100)
+  city          String   @db.VarChar(100)
+  district      String   @db.VarChar(100)
+  postalCode    String   @map("postal_code") @db.VarChar(10)
+  fullAddress   String   @map("full_address") @db.Text
+  isDefault     Boolean  @default(false) @map("is_default")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user   User    @relation(fields: [userId], references: [id])
+  orders Order[]
+
+  @@map("addresses")
+}
+
+// ==========================================
+// Model: Product — Data master cookies
+// ==========================================
+model Product {
+  id                 Int      @id @default(autoincrement())
+  name               String   @db.VarChar(100)
+  slug               String   @unique @db.VarChar(150)
+  description        String?  @db.Text
+  imageUrl           String?  @map("image_url") @db.VarChar(500)
+  productionTimeDays Int      @default(3) @map("production_time_days") // Waktu produksi default (hari kerja)
+  isAvailable        Boolean  @default(true) @map("is_available")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  variants ProductVariant[]
+  reviews  Review[]
+
+  @@map("products")
+}
+
+// ==========================================
+// Model: Flavor — Master varian rasa
+// ==========================================
+model Flavor {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(50)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  variants ProductVariant[]
+
+  @@map("flavors")
+}
+
+// ==========================================
+// Model: Size — Master varian ukuran
+// ==========================================
+model Size {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(50) // Small, Medium, Large
+  description String?  @db.VarChar(100) // 10pcs, 20pcs, 30pcs
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  variants ProductVariant[]
+
+  @@map("sizes")
+}
+
+// ==========================================
+// Model: ProductVariant — Kombinasi produk + rasa + ukuran + harga
+// ==========================================
+model ProductVariant {
+  id          Int      @id @default(autoincrement())
+  productId   Int      @map("product_id")
+  flavorId    Int      @map("flavor_id")
+  sizeId      Int      @map("size_id")
+  price       Int // Harga dalam Rupiah
+  isAvailable Boolean  @default(true) @map("is_available")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  product    Product     @relation(fields: [productId], references: [id])
+  flavor     Flavor      @relation(fields: [flavorId], references: [id])
+  size       Size        @relation(fields: [sizeId], references: [id])
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  @@unique([productId, flavorId, sizeId])
+  @@map("product_variants")
+}
+
+// ==========================================
+// Model: Cart — Keranjang belanja (1 per user)
+// ==========================================
+model Cart {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user  User       @relation(fields: [userId], references: [id])
+  items CartItem[]
+
+  @@map("carts")
+}
+
+// ==========================================
+// Model: CartItem — Item di dalam keranjang
+// ==========================================
+model CartItem {
+  id               Int      @id @default(autoincrement())
+  cartId           Int      @map("cart_id")
+  productVariantId Int      @map("product_variant_id")
+  quantity         Int      @default(1)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  cart           Cart           @relation(fields: [cartId], references: [id])
+  productVariant ProductVariant @relation(fields: [productVariantId], references: [id])
+
+  @@unique([cartId, productVariantId])
+  @@map("cart_items")
+}
+
+// ==========================================
+// Model: Order — Pesanan yang sudah di-checkout
+// ==========================================
+model Order {
+  id                  Int         @id @default(autoincrement())
+  orderNumber         String      @unique @map("order_number") @db.VarChar(30) // UTQ-20260506-001
+  userId              Int         @map("user_id")
+  addressId           Int         @map("address_id")
+  status              OrderStatus @default(PENDING_PAYMENT)
+  totalPrice          Int         @map("total_price") // Total harga produk
+  shippingCost        Int         @default(0) @map("shipping_cost") // Ongkir
+  grandTotal          Int         @map("grand_total") // totalPrice + shippingCost
+  shippingCourier     String?     @map("shipping_courier") @db.VarChar(50) // JNE, J&T, dll
+  trackingNumber      String?     @map("tracking_number") @db.VarChar(100) // Nomor resi
+  trackingUrl         String?     @map("tracking_url") @db.VarChar(500) // Link tracking
+  estimatedCompletion DateTime?   @map("estimated_completion") // Estimasi selesai produksi
+  paymentDeadline     DateTime    @map("payment_deadline") // Batas waktu pembayaran
+  cancelReason        String?     @map("cancel_reason") @db.Text
+  createdAt           DateTime    @default(now()) @map("created_at")
+  updatedAt           DateTime    @updatedAt @map("updated_at")
+
+  user            User             @relation(fields: [userId], references: [id])
+  address         Address          @relation(fields: [addressId], references: [id])
+  items           OrderItem[]
+  payment         Payment?
+  productionQueue ProductionQueue?
+
+  @@map("orders")
+}
+
+// ==========================================
+// Model: OrderItem — Item dalam pesanan (snapshot data produk)
+// ==========================================
+model OrderItem {
+  id               Int      @id @default(autoincrement())
+  orderId          Int      @map("order_id")
+  productVariantId Int      @map("product_variant_id")
+  productName      String   @map("product_name") @db.VarChar(100) // Snapshot nama produk
+  flavorName       String   @map("flavor_name") @db.VarChar(50) // Snapshot rasa
+  sizeName         String   @map("size_name") @db.VarChar(50) // Snapshot ukuran
+  price            Int // Snapshot harga saat order
+  quantity         Int
+  subtotal         Int // price * quantity
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  order          Order          @relation(fields: [orderId], references: [id])
+  productVariant ProductVariant @relation(fields: [productVariantId], references: [id])
+
+  @@map("order_items")
+}
+
+// ==========================================
+// Model: Payment — Bukti pembayaran
+// ==========================================
+model Payment {
+  id             Int           @id @default(autoincrement())
+  orderId        Int           @unique @map("order_id")
+  bankName       String        @map("bank_name") @db.VarChar(50) // BCA, BNI, dll
+  accountHolder  String        @map("account_holder") @db.VarChar(100) // Nama pengirim
+  amount         Int // Jumlah transfer
+  proofImageUrl  String        @map("proof_image_url") @db.VarChar(500) // URL bukti transfer
+  status         PaymentStatus @default(PENDING)
+  rejectReason   String?       @map("reject_reason") @db.Text
+  verifiedAt     DateTime?     @map("verified_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@map("payments")
+}
+
+// ==========================================
+// Model: Review — Review & rating dari customer
+// ==========================================
+model Review {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  productId Int      @map("product_id")
+  orderId   Int      @map("order_id")
+  rating    Int // 1-5
+  comment   String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user    User    @relation(fields: [userId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([userId, productId, orderId])
+  @@map("reviews")
+}
+
+// ==========================================
+// Model: ProductionQueue — Antrian produksi
+// ==========================================
+model ProductionQueue {
+  id             Int      @id @default(autoincrement())
+  orderId        Int      @unique @map("order_id")
+  productionDate DateTime @map("production_date") @db.Date // Tanggal produksi dijadwalkan
+  queuePosition  Int      @map("queue_position") // Posisi antrian di hari tersebut
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@map("production_queue")
+}
