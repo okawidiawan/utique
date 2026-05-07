@@ -280,10 +280,11 @@ PENDING → VERIFIED
 
 1. Masuk ke folder backend: `cd backend`
 2. Install dependensi: `npm install` atau `bun install`
-3. Duplikat `.env.example` menjadi `.env` dan sesuaikan `DATABASE_URL` (PostgreSQL)
-4. Generate Prisma Client: `npx prisma generate`
-5. Sinkronisasi database: `npx prisma db push`
-6. Jalankan server dev: `npm run dev` atau `bun run dev`
+3. Duplikat `.env.example` menjadi `.env` dan sesuaikan `DATABASE_URL` (PostgreSQL).
+4. Pastikan `DATABASE_URL` diatur di `prisma.config.ts` (URL di `schema.prisma` dihapus untuk kompatibilitas Prisma 7).
+5. Generate Prisma Client: `npx prisma generate`
+6. Sinkronisasi database: `npx prisma db push`
+7. Jalankan server dev: `npm run dev` atau `bun run dev`
 
 ### Frontend
 

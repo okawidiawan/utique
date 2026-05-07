@@ -7,14 +7,14 @@
 
 ## 1. Gambaran Umum
 
-| Aspek | Detail |
-|---|---|
-| **Nama** | Utique |
-| **Jenis Produk** | Cookies |
-| **Model Bisnis** | Pre-order (bukan ready stock) |
-| **Target Pasar** | Lingkungan & orang-orang terdekat |
-| **Kapasitas Produksi** | Maks. 10 order per hari |
-| **Platform** | Web Application (responsive) |
+| Aspek                  | Detail                            |
+| ---------------------- | --------------------------------- |
+| **Nama**               | Utique                            |
+| **Jenis Produk**       | Cookies                           |
+| **Model Bisnis**       | Pre-order (bukan ready stock)     |
+| **Target Pasar**       | Lingkungan & orang-orang terdekat |
+| **Kapasitas Produksi** | Maks. 10 order per hari           |
+| **Platform**           | Web Application (responsive)      |
 
 ---
 
@@ -22,42 +22,43 @@
 
 ### 🛍️ Customer Side
 
-| Fitur | Deskripsi |
-|---|---|
-| **Registrasi & Login** | User mendaftar dan login untuk bisa memesan |
-| **Manajemen Alamat** | User menambahkan dan mengelola alamat pengiriman |
-| **Katalog Produk** | Menampilkan daftar cookies yang tersedia |
-| **Detail Produk** | Menampilkan detail cookies dengan pilihan varian (rasa & ukuran) |
-| **Keranjang (Cart)** | User bisa menambahkan cookies ke keranjang sebelum checkout |
-| **Checkout** | Proses pemesanan dengan pemilihan alamat |
-| **Pembayaran** | Transfer manual ke rekening toko + upload bukti bayar |
-| **Batas Waktu Bayar** | Sistem otomatis membatalkan order jika tidak bayar dalam waktu tertentu (misal 1x24 jam) |
-| **Estimasi Pembuatan** | Muncul setelah pembayaran dikonfirmasi admin |
-| **Tracking Pengiriman** | Nomor resi + link ke website ekspedisi untuk cek status pengiriman |
-| **Riwayat Pesanan** | Melihat semua pesanan beserta statusnya |
-| **Review** | Customer bisa memberikan review/rating setelah pesanan selesai |
-| **Notifikasi** | Notifikasi update status pesanan via dashboard & email |
+| Fitur                   | Deskripsi                                                                                |
+| ----------------------- | ---------------------------------------------------------------------------------------- |
+| **Registrasi & Login**  | User mendaftar dan login untuk bisa memesan                                              |
+| **Manajemen Alamat**    | User menambahkan dan mengelola alamat pengiriman                                         |
+| **Katalog Produk**      | Menampilkan daftar cookies yang tersedia                                                 |
+| **Detail Produk**       | Menampilkan detail cookies dengan pilihan varian (rasa & ukuran)                         |
+| **Keranjang (Cart)**    | User bisa menambahkan cookies ke keranjang sebelum checkout                              |
+| **Checkout**            | Proses pemesanan dengan pemilihan alamat                                                 |
+| **Pembayaran**          | Transfer manual ke rekening toko + upload bukti bayar                                    |
+| **Batas Waktu Bayar**   | Sistem otomatis membatalkan order jika tidak bayar dalam waktu tertentu (misal 1x24 jam) |
+| **Estimasi Pembuatan**  | Muncul setelah pembayaran dikonfirmasi admin                                             |
+| **Tracking Pengiriman** | Nomor resi + link ke website ekspedisi untuk cek status pengiriman                       |
+| **Riwayat Pesanan**     | Melihat semua pesanan beserta statusnya                                                  |
+| **Review**              | Customer bisa memberikan review/rating setelah pesanan selesai                           |
+| **Notifikasi**          | Notifikasi update status pesanan via dashboard & email                                   |
 
 ### 🔧 Admin Side
 
-| Fitur | Deskripsi |
-|---|---|
-| **Dashboard** | Ringkasan order hari ini dan overview umum |
-| **Manajemen Produk** | CRUD produk cookies (nama, deskripsi, foto, varian, harga) |
-| **Upload Foto Produk** | Upload foto cookies via dashboard admin |
-| **Manajemen Order** | Melihat daftar order masuk |
-| **Konfirmasi Pembayaran** | Memverifikasi bukti bayar dari customer |
-| **Update Status Pesanan** | Mengubah status order sesuai progress |
-| **Set Estimasi** | Override estimasi pembuatan jika diperlukan |
-| **Input Resi** | Memasukkan nomor resi pengiriman |
-| **Notifikasi Order Masuk** | Notifikasi via email ketika ada order baru |
-| **Statistik** *(Fase 2)* | Produk terlaris, total revenue, trend penjualan |
+| Fitur                      | Deskripsi                                                  |
+| -------------------------- | ---------------------------------------------------------- |
+| **Dashboard**              | Ringkasan order hari ini dan overview umum                 |
+| **Manajemen Produk**       | CRUD produk cookies (nama, deskripsi, foto, varian, harga) |
+| **Upload Foto Produk**     | Upload foto cookies via dashboard admin                    |
+| **Manajemen Order**        | Melihat daftar order masuk                                 |
+| **Konfirmasi Pembayaran**  | Memverifikasi bukti bayar dari customer                    |
+| **Update Status Pesanan**  | Mengubah status order sesuai progress                      |
+| **Set Estimasi**           | Override estimasi pembuatan jika diperlukan                |
+| **Input Resi**             | Memasukkan nomor resi pengiriman                           |
+| **Notifikasi Order Masuk** | Notifikasi via email ketika ada order baru                 |
+| **Statistik** _(Fase 2)_   | Produk terlaris, total revenue, trend penjualan            |
 
 ---
 
 ## 3. Alur Pengguna (User Flow)
 
 ### Customer Flow
+
 ```
 Register → Login → Browse Katalog → Pilih Produk → Pilih Varian (Rasa & Ukuran)
 → Add to Cart → Checkout (pilih alamat) → Bayar (transfer + upload bukti)
@@ -67,6 +68,7 @@ Register → Login → Browse Katalog → Pilih Produk → Pilih Varian (Rasa & 
 ```
 
 ### Admin Flow
+
 ```
 Login → Lihat Dashboard → Ada Order Masuk (notifikasi email)
 → Cek Bukti Bayar → Konfirmasi Pembayaran → Order Masuk Antrian Produksi
@@ -120,17 +122,18 @@ Order baru dibayar Senin malam
 ## 6. Varian & Harga Produk
 
 ### Struktur Varian
+
 - Setiap cookies bisa memiliki **beberapa rasa** dan **beberapa ukuran**
 - **Semua kombinasi rasa × ukuran tersedia** (tergantung kemampuan produksi)
 - **Harga berbeda** per kombinasi varian dan ukuran
 
 ### Contoh Struktur
 
-| Produk | Rasa | Ukuran | Harga |
-|---|---|---|---|
-| Cookies Classic | Choco Chip | Small (10pcs) | Rp 25.000 |
+| Produk          | Rasa       | Ukuran         | Harga     |
+| --------------- | ---------- | -------------- | --------- |
+| Cookies Classic | Choco Chip | Small (10pcs)  | Rp 25.000 |
 | Cookies Classic | Choco Chip | Medium (20pcs) | Rp 45.000 |
-| Cookies Classic | Red Velvet | Small (10pcs) | Rp 30.000 |
+| Cookies Classic | Red Velvet | Small (10pcs)  | Rp 30.000 |
 | Cookies Classic | Red Velvet | Medium (20pcs) | Rp 55.000 |
 
 > [!NOTE]
@@ -140,32 +143,32 @@ Order baru dibayar Senin malam
 
 ## 7. Pembayaran
 
-| Aspek | Detail |
-|---|---|
-| **Metode** | Transfer bank manual (BCA/BNI/dll) |
-| **Konfirmasi** | Customer upload bukti bayar, admin verifikasi manual |
-| **Batas Waktu** | Order otomatis dibatalkan jika tidak bayar dalam waktu tertentu |
-| **Fase Lanjutan** | Integrasi payment gateway (Midtrans/Xendit) jika dibutuhkan |
+| Aspek             | Detail                                                          |
+| ----------------- | --------------------------------------------------------------- |
+| **Metode**        | Transfer bank manual (BCA/BNI/dll)                              |
+| **Konfirmasi**    | Customer upload bukti bayar, admin verifikasi manual            |
+| **Batas Waktu**   | Order otomatis dibatalkan jika tidak bayar dalam waktu tertentu |
+| **Fase Lanjutan** | Integrasi payment gateway (Midtrans/Xendit) jika dibutuhkan     |
 
 ---
 
 ## 8. Pengiriman
 
-| Aspek | Detail |
-|---|---|
-| **Metode** | Jasa ekspedisi (JNE, J&T, SiCepat, dll) |
-| **Ongkir** | Manual / flat rate per zona untuk awal |
-| **Tracking** | Admin input nomor resi manual → customer dapat link tracking ke website ekspedisi |
-| **Fase Lanjutan** | Integrasi API ongkir (RajaOngkir) jika dibutuhkan |
+| Aspek             | Detail                                                                            |
+| ----------------- | --------------------------------------------------------------------------------- |
+| **Metode**        | Jasa ekspedisi (JNE, J&T, SiCepat, dll)                                           |
+| **Ongkir**        | Manual / flat rate per zona untuk awal                                            |
+| **Tracking**      | Admin input nomor resi manual → customer dapat link tracking ke website ekspedisi |
+| **Fase Lanjutan** | Integrasi API ongkir (RajaOngkir) jika dibutuhkan                                 |
 
 ---
 
 ## 9. Notifikasi
 
-| Target | Channel | Trigger |
-|---|---|---|
-| **Admin** | Email (Nodemailer + Gmail SMTP) | Order baru masuk |
-| **Customer** | Dashboard + Email | Perubahan status pesanan (pembayaran dikonfirmasi, sedang diproses, dikirim + resi, selesai) |
+| Target       | Channel                         | Trigger                                                                                      |
+| ------------ | ------------------------------- | -------------------------------------------------------------------------------------------- |
+| **Admin**    | Email (Nodemailer + Gmail SMTP) | Order baru masuk                                                                             |
+| **Customer** | Dashboard + Email               | Perubahan status pesanan (pembayaran dikonfirmasi, sedang diproses, dikirim + resi, selesai) |
 
 > [!TIP]
 > Gmail SMTP gratis dengan limit 500 email/hari — lebih dari cukup untuk skala awal.
@@ -203,24 +206,24 @@ graph TB
     B --> F
 ```
 
-| Layer | Teknologi |
-|---|---|
-| **Frontend** | React.js (JavaScript) — 1 app untuk customer & admin |
-| **Backend** | Express.js |
-| **ORM** | Prisma |
-| **Database** | PostgreSQL |
-| **File Storage** | Cloudinary (free tier: 25GB) |
-| **Email** | Nodemailer + Gmail SMTP |
-| **Auth** | Role-based (Customer & Admin) |
+| Layer            | Teknologi                                            |
+| ---------------- | ---------------------------------------------------- |
+| **Frontend**     | React.js (JavaScript) — 1 app untuk customer & admin |
+| **Backend**      | Express.js                                           |
+| **ORM**          | Prisma                                               |
+| **Database**     | PostgreSQL                                           |
+| **File Storage** | Cloudinary (free tier: 25GB)                         |
+| **Email**        | Nodemailer + Gmail SMTP                              |
+| **Auth**         | Role-based (Customer & Admin)                        |
 
 ### Hosting (Free Tier)
 
-| Service | Fungsi |
-|---|---|
-| **Vercel** | Deploy frontend React |
-| **Railway** atau **Render** | Deploy backend Express |
-| **Neon** atau **Supabase** | PostgreSQL database |
-| **Cloudinary** | Upload & serve foto produk |
+| Service                     | Fungsi                     |
+| --------------------------- | -------------------------- |
+| **Vercel**                  | Deploy frontend React      |
+| **Railway** atau **Render** | Deploy backend Express     |
+| **Neon** atau **Supabase**  | PostgreSQL database        |
+| **Cloudinary**              | Upload & serve foto produk |
 
 ---
 
@@ -228,29 +231,29 @@ graph TB
 
 ### Customer Pages
 
-| Halaman | Route (Draft) | Deskripsi |
-|---|---|---|
-| Home / Landing | `/` | Halaman utama, highlight produk |
-| Katalog | `/products` | Daftar semua cookies |
-| Detail Produk | `/products/:id` | Detail cookies + pilih varian + add to cart |
-| Keranjang | `/cart` | Daftar item di keranjang |
-| Checkout | `/checkout` | Isi alamat, review pesanan |
-| Pembayaran | `/payment/:orderId` | Info rekening + upload bukti bayar |
-| Riwayat Pesanan | `/orders` | Daftar semua pesanan user |
-| Detail Pesanan | `/orders/:id` | Status, estimasi, resi, link tracking |
-| Profil | `/profile` | Edit profil & kelola alamat |
-| Login | `/login` | Halaman login |
-| Register | `/register` | Halaman registrasi |
+| Halaman         | Route (Draft)       | Deskripsi                                   |
+| --------------- | ------------------- | ------------------------------------------- |
+| Home / Landing  | `/`                 | Halaman utama, highlight produk             |
+| Katalog         | `/products`         | Daftar semua cookies                        |
+| Detail Produk   | `/products/:id`     | Detail cookies + pilih varian + add to cart |
+| Keranjang       | `/cart`             | Daftar item di keranjang                    |
+| Checkout        | `/checkout`         | Isi alamat, review pesanan                  |
+| Pembayaran      | `/payment/:orderId` | Info rekening + upload bukti bayar          |
+| Riwayat Pesanan | `/orders`           | Daftar semua pesanan user                   |
+| Detail Pesanan  | `/orders/:id`       | Status, estimasi, resi, link tracking       |
+| Profil          | `/profile`          | Edit profil & kelola alamat                 |
+| Login           | `/login`            | Halaman login                               |
+| Register        | `/register`         | Halaman registrasi                          |
 
 ### Admin Pages
 
-| Halaman | Route (Draft) | Deskripsi |
-|---|---|---|
-| Dashboard | `/admin` | Overview order & ringkasan |
-| Manajemen Produk | `/admin/products` | CRUD produk cookies |
-| Tambah/Edit Produk | `/admin/products/new` atau `/admin/products/:id/edit` | Form produk + upload foto |
-| Manajemen Order | `/admin/orders` | Daftar semua order |
-| Detail Order | `/admin/orders/:id` | Konfirmasi bayar, update status, input resi |
+| Halaman            | Route (Draft)                                         | Deskripsi                                   |
+| ------------------ | ----------------------------------------------------- | ------------------------------------------- |
+| Dashboard          | `/admin`                                              | Overview order & ringkasan                  |
+| Manajemen Produk   | `/admin/products`                                     | CRUD produk cookies                         |
+| Tambah/Edit Produk | `/admin/products/new` atau `/admin/products/:id/edit` | Form produk + upload foto                   |
+| Manajemen Order    | `/admin/orders`                                       | Daftar semua order                          |
+| Detail Order       | `/admin/orders/:id`                                   | Konfirmasi bayar, update status, input resi |
 
 ---
 
@@ -280,9 +283,9 @@ graph TB
 - [ ] Review & rating dari customer
 - [ ] Statistik penjualan (produk terlaris, revenue, trend)
 - [ ] Integrasi API ongkir (RajaOngkir)
-- [ ] Kode promo / diskon *(opsional)*
-- [ ] Integrasi payment gateway *(opsional)*
-- [ ] WhatsApp notification *(opsional, jika ada API gratis)*
+- [ ] Kode promo / diskon _(opsional)_
+- [ ] Integrasi payment gateway _(opsional)_
+- [ ] WhatsApp notification _(opsional, jika ada API gratis)_
 
 ---
 
