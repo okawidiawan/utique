@@ -1,7 +1,13 @@
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import pg from "pg";
 
-// Inisialisasi Prisma Client dengan logging di mode development
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg(pool);
+
+// Inisialisasi Prisma Client dengan driver adapter (rekomendasi Prisma 7)
 export const prisma = new PrismaClient({
+  adapter,
   log:
     process.env.NODE_ENV === "development"
       ? ["query", "info", "warn", "error"]

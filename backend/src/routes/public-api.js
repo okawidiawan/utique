@@ -1,4 +1,5 @@
 import express from "express";
+import userController from "../controller/user-controller.js";
 
 export const publicRouter = express.Router();
 
@@ -18,8 +19,8 @@ publicRouter.get("/api/health", (req, res) => {
 // ==========================================
 // Auth Routes (Public)
 // ==========================================
-// TODO: POST /api/users — Registrasi akun baru
-// TODO: POST /api/users/login — Login
+publicRouter.post("/api/users", userController.register);
+publicRouter.post("/api/users/login", userController.login);
 
 // ==========================================
 // Product Routes (Public)

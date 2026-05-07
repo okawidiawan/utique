@@ -1,205 +1,388 @@
-# Feature: Setup Database PostgreSQL & Koneksi Prisma
+# Feature: Implementasi API Auth & User
 
 ## Deskripsi
 
-Melakukan setup database PostgreSQL untuk project Utique, termasuk membuat database `utique_db`, mengkonfigurasi file `.env` dengan kredensial yang benar, men-generate Prisma Client, dan melakukan sinkronisasi schema ke database agar semua tabel siap digunakan.
-
-Schema Prisma sudah tersedia di `backend/prisma/schema.prisma` hasil dari fase scaffolding. Issue ini fokus pada **koneksi dan sinkronisasi** ke database PostgreSQL lokal.
+Implementasi seluruh endpoint Auth & User sebagai fondasi sistem autentikasi project Utique. Issue ini mencakup 5 endpoint: registrasi, login, get profil, update profil, dan logout. Semua fitur lain (cart, order, address, dll) bergantung pada sistem ini.
 
 ---
 
 ## Konteks
 
-- **Prisma Schema** sudah di-scaffold lengkap dengan 12 model/tabel:
-  - `User`, `Address`, `Product`, `Flavor`, `Size`, `ProductVariant`, `Cart`, `CartItem`, `Order`, `OrderItem`, `Payment`, `Review`, `ProductionQueue`
-- **Prisma Client** (`@prisma/client@^7.8.0`) dan `prisma` CLI (`^7.8.0`) sudah terinstall di `package.json`
-- **File konfigurasi** `prisma.config.ts` sudah ada dan mengarah ke `prisma/schema.prisma`
-- **Database config** (`database.js`) sudah ada di `src/application/database.js` dengan Prisma Client yang siap digunakan
-- **File `.env` belum dibuat** — hanya ada `.env.example` sebagai template
+### Infrastruktur yang Sudah Tersedia
+
+- **Prisma Schema**: Model `User` sudah didefinisikan di `backend/prisma/schema.prisma` dengan field `id`, `name`, `email`, `password`, `phone`, `role`, `token`, `createdAt`, `updatedAt`.
+- **Database**: PostgreSQL `utique_db` sudah tersedia dan tersinkronisasi.
+- **Auth Middleware**: `auth-middleware.js` sudah tersedia — memvalidasi Bearer token dari header `Authorization` dan menyimpan data user di `req.user`.
+- **Error Handling**: `ResponseError` class dan `error-middleware.js` sudah tersedia.
+- **Router**: 3 router sudah tersedia:
+  - `public-api.js` — untuk endpoint tanpa autentikasi (register, login)
+  - `api.js` — untuk endpoint yang membutuhkan token (get/update profil, logout)
+  - `admin-api.js` — untuk endpoint admin
+- **Dependencies**: `bcrypt`, `uuid`, `zod` sudah terinstall di `package.json`.
+
+### Konvensi yang Harus Diikuti (dari CONTEXT.md)
+
+- **Arsitektur**: `Router → Controller → Service → Prisma`
+- **Validasi**: Di layer Service menggunakan Zod, pesan error dalam **Bahasa Indonesia**
+- **Response Format**: Sukses `{ data: ... }`, Error `{ error: "..." }`
+- **Error Handling**: `try...catch` di Controller, teruskan ke `next(e)`
+- **Naming**: File `kebab-case.js`, variabel `camelCase`, skema Zod `[aksi][Domain]Validation`
+- **Dokumentasi**: Komentar Bahasa Indonesia di setiap function
+- **Auth**: Stateless — token disimpan di field `token` tabel User, divalidasi via header `Authorization: Bearer <token>`
 
 ---
 
-## Kredensial Database
+## Endpoint yang Diimplementasi
 
-| Key | Value |
-|---|---|
-| **Username** | `postgres` |
-| **Password** | `12345` |
-| **Host** | `localhost` |
-| **Port** | `5432` |
-| **Database** | `utique_db` |
+### 1. `POST /api/users` — Registrasi Akun Baru
 
-**DATABASE_URL**: `postgresql://postgres:12345@localhost:5432/utique_db?schema=public`
+**Router**: `public-api.js` (tanpa autentikasi)
+
+**Request Body:**
+
+```json
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "password": "rahasia123",
+  "phone": "081234567890"  // opsional
+}
+```
+
+**Validasi (Zod):**
+
+| Field | Aturan | Pesan Error |
+|---|---|---|
+| `name` | Wajib, string, min 1, maks 100 karakter | `"Nama wajib diisi."`, `"Nama maksimal 100 karakter."` |
+| `email` | Wajib, format email valid, maks 100 karakter | `"Email wajib diisi."`, `"Format email tidak valid."` |
+| `password` | Wajib, min 6 karakter, maks 100 karakter | `"Password wajib diisi."`, `"Password minimal 6 karakter."` |
+| `phone` | Opsional, maks 20 karakter | `"Nomor telepon maksimal 20 karakter."` |
+
+**Logika Service:**
+
+1. Validasi input menggunakan Zod
+2. Cek apakah email sudah terdaftar → jika ya, throw `ResponseError(400, "Email sudah terdaftar.")`
+3. Hash password menggunakan `bcrypt` (salt round: 10)
+4. Buat user baru di database dengan role default `CUSTOMER`
+5. Return data user (tanpa password dan token)
+
+**Response Sukses (201):**
+
+```json
+{
+  "data": {
+    "id": 1,
+    "name": "John Doe",
+    "email": "john@example.com",
+    "phone": "081234567890",
+    "role": "CUSTOMER",
+    "createdAt": "2026-05-07T10:00:00.000Z"
+  }
+}
+```
+
+**Response Error:**
+
+| Status | Kondisi | Response |
+|---|---|---|
+| 400 | Validasi gagal | `{ "error": "Nama wajib diisi., Email wajib diisi." }` |
+| 400 | Email sudah terdaftar | `{ "error": "Email sudah terdaftar." }` |
 
 ---
 
-## Langkah Implementasi
+### 2. `POST /api/users/login` — Login
 
-### 1. Buat Database di PostgreSQL
+**Router**: `public-api.js` (tanpa autentikasi)
 
-Buat database `utique_db` di PostgreSQL lokal menggunakan salah satu cara berikut:
+**Request Body:**
 
-**Opsi A — Via Command Line (psql):**
-
-```bash
-psql -U postgres -c "CREATE DATABASE utique_db;"
+```json
+{
+  "email": "john@example.com",
+  "password": "rahasia123"
+}
 ```
 
-**Opsi B — Via SQL Query di pgAdmin atau tool lain:**
+**Validasi (Zod):**
 
-```sql
-CREATE DATABASE utique_db;
+| Field | Aturan | Pesan Error |
+|---|---|---|
+| `email` | Wajib, format email valid, maks 100 karakter | `"Email wajib diisi."`, `"Format email tidak valid."` |
+| `password` | Wajib, min 1 karakter, maks 100 karakter | `"Password wajib diisi."` |
+
+**Logika Service:**
+
+1. Validasi input menggunakan Zod
+2. Cari user berdasarkan email → jika tidak ditemukan, throw `ResponseError(401, "Email atau password salah.")`
+3. Bandingkan password dengan `bcrypt.compare()` → jika tidak cocok, throw `ResponseError(401, "Email atau password salah.")`
+4. Generate token menggunakan `uuid.v4()`
+5. Simpan token di field `token` pada tabel User
+6. Return data user beserta token
+
+**Response Sukses (200):**
+
+```json
+{
+  "data": {
+    "id": 1,
+    "name": "John Doe",
+    "email": "john@example.com",
+    "phone": "081234567890",
+    "role": "CUSTOMER",
+    "token": "550e8400-e29b-41d4-a716-446655440000"
+  }
+}
 ```
 
-### 2. Buat File `.env`
+**Response Error:**
 
-Buat file `backend/.env` berdasarkan template `.env.example` dengan kredensial yang sudah ditentukan:
+| Status | Kondisi | Response |
+|---|---|---|
+| 400 | Validasi gagal | `{ "error": "Email wajib diisi., Password wajib diisi." }` |
+| 401 | Email tidak ditemukan | `{ "error": "Email atau password salah." }` |
+| 401 | Password salah | `{ "error": "Email atau password salah." }` |
 
-```env
-# Database
-DATABASE_URL="postgresql://postgres:12345@localhost:5432/utique_db?schema=public"
-
-# Server
-PORT=5000
-
-# Email (Nodemailer + Gmail SMTP)
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_USER=your-email@gmail.com
-EMAIL_PASS=your-app-password
-
-# Cloudinary
-CLOUDINARY_CLOUD_NAME=your-cloud-name
-CLOUDINARY_API_KEY=your-api-key
-CLOUDINARY_API_SECRET=your-api-secret
-
-# Payment deadline (dalam jam)
-PAYMENT_DEADLINE_HOURS=24
-```
-
-> [!NOTE]
-> Untuk saat ini, hanya `DATABASE_URL` dan `PORT` yang perlu diisi dengan nilai yang benar. Kredensial Email dan Cloudinary bisa diisi nanti saat fitur tersebut diimplementasi.
-
-### 3. Generate Prisma Client
-
-Jalankan perintah berikut untuk men-generate Prisma Client berdasarkan schema:
-
-```bash
-cd backend
-npx prisma generate
-```
-
-**Hasil yang diharapkan:**
-
-- Folder `node_modules/.prisma/client` ter-generate
-- Prisma Client siap digunakan oleh `src/application/database.js`
-
-### 4. Sinkronisasi Schema ke Database
-
-Gunakan `prisma db push` untuk membuat semua tabel di database berdasarkan schema:
-
-```bash
-cd backend
-npx prisma db push
-```
-
-**Hasil yang diharapkan:**
-
-Semua tabel berikut berhasil dibuat di database `utique_db`:
-
-| Tabel | Deskripsi |
-|---|---|
-| `users` | Data pengguna (customer & admin), dengan field `role` |
-| `addresses` | Alamat pengiriman milik user, mendukung multiple alamat |
-| `products` | Data master cookies (nama, slug, deskripsi, foto, waktu produksi) |
-| `flavors` | Master varian rasa (Choco Chip, Red Velvet, dll) |
-| `sizes` | Master varian ukuran (Small, Medium, Large + deskripsi jumlah) |
-| `product_variants` | Kombinasi Product + Flavor + Size dengan harga spesifik |
-| `carts` | Keranjang belanja (1 cart per user) |
-| `cart_items` | Item di dalam keranjang, mereferensikan product_variant |
-| `orders` | Pesanan yang sudah di-checkout |
-| `order_items` | Item dalam order, menyimpan snapshot data produk |
-| `payments` | Bukti pembayaran (upload bukti transfer) |
-| `reviews` | Review & rating (1-5) dari customer |
-| `production_queue` | Antrian produksi untuk kalkulasi estimasi |
-
-### 5. Verifikasi Tabel dengan Prisma Studio
-
-Buka Prisma Studio untuk memverifikasi secara visual bahwa semua tabel sudah terbuat:
-
-```bash
-cd backend
-npx prisma studio
-```
-
-**Prisma Studio** akan terbuka di browser (default: `http://localhost:5555`) dan menampilkan semua model/tabel yang ada di database.
+> **Catatan**: Pesan error login harus generik ("Email atau password salah.") — tidak boleh membedakan apakah email yang salah atau password yang salah, untuk mencegah user enumeration.
 
 ---
 
-## Verifikasi
+### 3. `GET /api/users/current` — Mengambil Profil User
 
-Setelah semua langkah selesai, pastikan hal-hal berikut:
+**Router**: `api.js` (membutuhkan autentikasi)
 
-- [ ] Database `utique_db` berhasil dibuat di PostgreSQL lokal
-- [ ] File `backend/.env` sudah dibuat dengan `DATABASE_URL` yang benar
-- [ ] `npx prisma generate` berhasil tanpa error
-- [ ] `npx prisma db push` berhasil tanpa error — semua 13 tabel terbuat
-- [ ] `npx prisma studio` menampilkan semua model/tabel dengan benar
-- [ ] Tidak ada perubahan kode pada Prisma schema (menggunakan schema yang sudah ada)
+**Request**: Tidak ada body. User diidentifikasi dari `req.user` yang di-set oleh `auth-middleware.js`.
+
+**Logika Service:**
+
+1. Ambil data user dari database berdasarkan `req.user.id`
+2. Return data user (tanpa password dan token)
+
+**Response Sukses (200):**
+
+```json
+{
+  "data": {
+    "id": 1,
+    "name": "John Doe",
+    "email": "john@example.com",
+    "phone": "081234567890",
+    "role": "CUSTOMER",
+    "createdAt": "2026-05-07T10:00:00.000Z",
+    "updatedAt": "2026-05-07T10:00:00.000Z"
+  }
+}
+```
+
+**Response Error:**
+
+| Status | Kondisi | Response |
+|---|---|---|
+| 401 | Token tidak ada / tidak valid | `{ "error": "Akses ditolak. Token tidak valid atau sudah expired." }` |
 
 ---
 
-## Catatan
+### 4. `PATCH /api/users/current` — Memperbarui Profil User
 
-### Enum yang Dibuat
+**Router**: `api.js` (membutuhkan autentikasi)
 
-Schema ini menggunakan 3 PostgreSQL enum:
+**Request Body** (semua field opsional, minimal 1 harus diisi):
 
-| Enum | Nilai |
-|---|---|
-| `Role` | `CUSTOMER`, `ADMIN` |
-| `OrderStatus` | `PENDING_PAYMENT`, `PAID`, `IN_QUEUE`, `IN_PRODUCTION`, `DONE`, `SHIPPED`, `COMPLETED`, `CANCELLED` |
-| `PaymentStatus` | `PENDING`, `VERIFIED`, `REJECTED` |
-
-### Relasi Antar Tabel
-
-```
-User ──1:N──> Address
-User ──1:1──> Cart ──1:N──> CartItem ──N:1──> ProductVariant
-User ──1:N──> Order ──1:N──> OrderItem ──N:1──> ProductVariant
-User ──1:N──> Review ──N:1──> Product
-
-Product ──1:N──> ProductVariant <──N:1── Flavor
-                                <──N:1── Size
-
-Order ──1:1──> Payment
-Order ──1:1──> ProductionQueue
-Order ──N:1──> Address
+```json
+{
+  "name": "John Updated",
+  "email": "john.new@example.com",
+  "password": "newpassword123",
+  "phone": "089876543210"
+}
 ```
 
-### Unique Constraints
+**Validasi (Zod):**
 
-| Tabel | Constraint |
+| Field | Aturan | Pesan Error |
+|---|---|---|
+| `name` | Opsional, min 1, maks 100 karakter | `"Nama minimal 1 karakter."`, `"Nama maksimal 100 karakter."` |
+| `email` | Opsional, format email valid, maks 100 karakter | `"Format email tidak valid."` |
+| `password` | Opsional, min 6 karakter, maks 100 karakter | `"Password minimal 6 karakter."` |
+| `phone` | Opsional, maks 20 karakter | `"Nomor telepon maksimal 20 karakter."` |
+
+**Logika Service:**
+
+1. Validasi input menggunakan Zod
+2. Jika tidak ada field yang diisi, throw `ResponseError(400, "Minimal satu field harus diisi untuk update.")`
+3. Jika email diubah, cek apakah email baru sudah digunakan user lain → jika ya, throw `ResponseError(400, "Email sudah digunakan.")`
+4. Jika password diubah, hash password baru dengan `bcrypt`
+5. Update data user di database
+6. Return data user yang sudah diupdate (tanpa password dan token)
+
+**Response Sukses (200):**
+
+```json
+{
+  "data": {
+    "id": 1,
+    "name": "John Updated",
+    "email": "john.new@example.com",
+    "phone": "089876543210",
+    "role": "CUSTOMER",
+    "createdAt": "2026-05-07T10:00:00.000Z",
+    "updatedAt": "2026-05-07T12:00:00.000Z"
+  }
+}
+```
+
+**Response Error:**
+
+| Status | Kondisi | Response |
+|---|---|---|
+| 400 | Validasi gagal | `{ "error": "..." }` |
+| 400 | Tidak ada field yang diisi | `{ "error": "Minimal satu field harus diisi untuk update." }` |
+| 400 | Email sudah digunakan user lain | `{ "error": "Email sudah digunakan." }` |
+| 401 | Token tidak valid | `{ "error": "Akses ditolak. Token tidak valid atau sudah expired." }` |
+
+---
+
+### 5. `DELETE /api/users/logout` — Logout
+
+**Router**: `api.js` (membutuhkan autentikasi)
+
+**Request**: Tidak ada body. User diidentifikasi dari `req.user`.
+
+**Logika Service:**
+
+1. Set field `token` pada user menjadi `null`
+2. Return pesan sukses
+
+**Response Sukses (200):**
+
+```json
+{
+  "data": "Berhasil logout."
+}
+```
+
+**Response Error:**
+
+| Status | Kondisi | Response |
+|---|---|---|
+| 401 | Token tidak valid | `{ "error": "Akses ditolak. Token tidak valid atau sudah expired." }` |
+
+---
+
+## File yang Harus Dibuat/Dimodifikasi
+
+### File Baru
+
+| File | Deskripsi |
 |---|---|
-| `users` | `email` (unique) |
-| `products` | `slug` (unique) |
-| `flavors` | `name` (unique) |
-| `sizes` | `name` (unique) |
-| `product_variants` | `product_id` + `flavor_id` + `size_id` (composite unique) |
-| `carts` | `user_id` (unique — 1 cart per user) |
-| `cart_items` | `cart_id` + `product_variant_id` (composite unique) |
-| `orders` | `order_number` (unique) |
-| `payments` | `order_id` (unique — 1 payment per order) |
-| `reviews` | `user_id` + `product_id` + `order_id` (composite unique) |
-| `production_queue` | `order_id` (unique — 1 queue entry per order) |
+| `src/validation/user-validation.js` | Skema Zod: `registerUserValidation`, `loginUserValidation`, `updateUserValidation` |
+| `src/services/user-service.js` | Logika bisnis: `register()`, `login()`, `get()`, `update()`, `logout()` |
+| `src/controller/user-controller.js` | Handler HTTP: `register()`, `login()`, `get()`, `update()`, `logout()` |
+| `tests/user.test.js` | Unit test untuk semua 5 endpoint |
+
+### File yang Dimodifikasi
+
+| File | Perubahan |
+|---|---|
+| `src/routes/public-api.js` | Tambah route `POST /api/users` dan `POST /api/users/login` |
+| `src/routes/api.js` | Tambah route `GET /api/users/current`, `PATCH /api/users/current`, `DELETE /api/users/logout` |
+
+---
+
+## Detail Implementasi per File
+
+### `src/validation/user-validation.js`
+
+```javascript
+// Skema validasi yang diekspor:
+export const registerUserValidation = z.object({ ... });
+export const loginUserValidation = z.object({ ... });
+export const updateUserValidation = z.object({ ... });
+```
+
+### `src/services/user-service.js`
+
+```javascript
+// Method yang diekspor:
+const register = async (request) => { ... };
+const login = async (request) => { ... };
+const get = async (userId) => { ... };
+const update = async (userId, request) => { ... };
+const logout = async (userId) => { ... };
+
+export default { register, login, get, update, logout };
+```
+
+### `src/controller/user-controller.js`
+
+```javascript
+// Semua handler menggunakan pola try...catch + next(e)
+const register = async (req, res, next) => { ... };
+const login = async (req, res, next) => { ... };
+const get = async (req, res, next) => { ... };
+const update = async (req, res, next) => { ... };
+const logout = async (req, res, next) => { ... };
+
+export default { register, login, get, update, logout };
+```
+
+---
+
+## Unit Test
+
+### Skenario Test yang Harus Dicover
+
+#### Register — `POST /api/users`
+- [ ] Berhasil registrasi dengan data lengkap
+- [ ] Berhasil registrasi tanpa phone (opsional)
+- [ ] Gagal jika name kosong
+- [ ] Gagal jika email tidak valid
+- [ ] Gagal jika password kurang dari 6 karakter
+- [ ] Gagal jika email sudah terdaftar
+
+#### Login — `POST /api/users/login`
+- [ ] Berhasil login dengan kredensial benar
+- [ ] Gagal jika email tidak terdaftar
+- [ ] Gagal jika password salah
+- [ ] Gagal jika email kosong
+- [ ] Gagal jika password kosong
+
+#### Get Current User — `GET /api/users/current`
+- [ ] Berhasil mendapatkan profil user
+- [ ] Gagal jika tidak ada token (401)
+- [ ] Gagal jika token tidak valid (401)
+
+#### Update User — `PATCH /api/users/current`
+- [ ] Berhasil update nama
+- [ ] Berhasil update email
+- [ ] Berhasil update password
+- [ ] Berhasil update phone
+- [ ] Berhasil update multiple field sekaligus
+- [ ] Gagal jika tidak ada field yang diisi
+- [ ] Gagal jika email baru sudah digunakan user lain
+- [ ] Gagal jika token tidak valid (401)
+
+#### Logout — `DELETE /api/users/logout`
+- [ ] Berhasil logout (token menjadi null)
+- [ ] Gagal jika token tidak valid (401)
+- [ ] Token yang sudah di-logout tidak bisa digunakan lagi
+
+---
+
+## Catatan Penting
+
+1. **Password Security**: Password di-hash menggunakan `bcrypt` dengan salt round 10. Password **tidak boleh** dikembalikan di response manapun.
+2. **Token Security**: Token di-generate menggunakan `uuid.v4()`. Token **tidak boleh** dikembalikan di response get/update profil — hanya di response login.
+3. **User Enumeration Prevention**: Pesan error login harus generik ("Email atau password salah."), tidak membedakan apakah email atau password yang salah.
+4. **Data Isolation**: Semua query profil user menggunakan `user.id` dari `req.user` (yang sudah divalidasi oleh auth middleware).
 
 ---
 
 ## Referensi
 
-- Prisma Schema: [`backend/prisma/schema.prisma`](file:///d:/Development/Web/Project/Projek%20Oka/utique/backend/prisma/schema.prisma)
-- Database Config: [`backend/src/application/database.js`](file:///d:/Development/Web/Project/Projek%20Oka/utique/backend/src/application/database.js)
-- Prisma Config: [`backend/prisma.config.ts`](file:///d:/Development/Web/Project/Projek%20Oka/utique/backend/prisma.config.ts)
-- Environment Template: [`backend/.env.example`](file:///d:/Development/Web/Project/Projek%20Oka/utique/backend/.env.example)
-- Brainstorming: [`brainstorming_utique.md`](file:///d:/Development/Web/Project/Projek%20Oka/utique/brainstorming_utique.md)
-- Context: [`CONTEXT.md`](file:///d:/Development/Web/Project/Projek%20Oka/utique/CONTEXT.md)
+- CONTEXT.md: `CONTEXT.md`
+- Prisma Schema (User model): `backend/prisma/schema.prisma` (baris 43-60)
+- Auth Middleware: `backend/src/middleware/auth-middleware.js`
+- Error Middleware: `backend/src/error/error-middleware.js`
+- ResponseError Class: `backend/src/error/response-error.js`
+- Public Router: `backend/src/routes/public-api.js`
+- API Router: `backend/src/routes/api.js`
