@@ -5,8 +5,8 @@
   "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "dev": "nodemon src/index.js",
-    "start": "node src/index.js",
+    "dev": "bun --watch src/index.js",
+    "start": "bun src/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": ["cookies", "e-commerce", "pre-order"],
@@ -25,7 +25,6 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14",
     "prisma": "^7.8.0"
   }
 }
