@@ -2,11 +2,7 @@ import { prisma } from "../src/application/database.js";
 import bcrypt from "bcrypt";
 
 export const removeTestUser = async () => {
-  await prisma.user.deleteMany({
-    where: {
-      email: "test@example.com",
-    },
-  });
+  await prisma.user.deleteMany({});
 };
 
 export const createTestUser = async () => {

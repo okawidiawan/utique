@@ -51,6 +51,19 @@ describe("User API", () => {
       expect(result.body.error).toContain("Format email tidak valid.");
       expect(result.body.error).toContain("Password minimal 6 karakter.");
     });
+
+    it("should can register new user without phone", async () => {
+      const result = await request(web).post("/api/users").send({
+        name: "Test User",
+        email: "test@example.com",
+        password: "password123",
+        // phone tidak diisi
+      });
+
+      expect(result.status).toBe(201);
+      expect(result.body.data.name).toBe("Test User");
+      expect(result.body.data.phone).toBeNull();
+    });
   });
 
   describe("POST /api/users/login", () => {
@@ -90,6 +103,26 @@ describe("User API", () => {
 
       expect(result.status).toBe(401);
       expect(result.body.error).toBe("Email atau password salah.");
+    });
+
+    it("should reject login if email is empty", async () => {
+      const result = await request(web).post("/api/users/login").send({
+        email: "",
+        password: "password123",
+      });
+
+      expect(result.status).toBe(400);
+      expect(result.body.error).toContain("Email wajib diisi.");
+    });
+
+    it("should reject login if password is empty", async () => {
+      const result = await request(web).post("/api/users/login").send({
+        email: "test@example.com",
+        password: "",
+      });
+
+      expect(result.status).toBe(400);
+      expect(result.body.error).toContain("Password wajib diisi.");
     });
   });
 
@@ -194,6 +227,50 @@ describe("User API", () => {
       expect(result.status).toBe(400);
       expect(result.body.error).toBe("Email sudah digunakan.");
     });
+
+    it("should can update email", async () => {
+      await createTestUser();
+
+      const result = await request(web)
+        .patch("/api/users/current")
+        .set("Authorization", "Bearer test-token")
+        .send({
+          email: "newemail@example.com",
+        });
+
+      expect(result.status).toBe(200);
+      expect(result.body.data.email).toBe("newemail@example.com");
+    });
+
+    it("should can update phone", async () => {
+      await createTestUser();
+
+      const result = await request(web)
+        .patch("/api/users/current")
+        .set("Authorization", "Bearer test-token")
+        .send({
+          phone: "089876543210",
+        });
+
+      expect(result.status).toBe(200);
+      expect(result.body.data.phone).toBe("089876543210");
+    });
+
+    it("should can update multiple fields", async () => {
+      await createTestUser();
+
+      const result = await request(web)
+        .patch("/api/users/current")
+        .set("Authorization", "Bearer test-token")
+        .send({
+          name: "New Name",
+          phone: "081111111111",
+        });
+
+      expect(result.status).toBe(200);
+      expect(result.body.data.name).toBe("New Name");
+      expect(result.body.data.phone).toBe("081111111111");
+    });
   });
 
   describe("DELETE /api/users/logout", () => {
@@ -215,6 +292,23 @@ describe("User API", () => {
       const result = await request(web)
         .delete("/api/users/logout")
         .set("Authorization", "Bearer invalid");
+
+      expect(result.status).toBe(401);
+      expect(result.body.error).toBe("Akses ditolak. Token tidak valid atau sudah expired.");
+    });
+
+    it("should not be able to use token after logout", async () => {
+      await createTestUser();
+
+      // Logout dulu
+      await request(web)
+        .delete("/api/users/logout")
+        .set("Authorization", "Bearer test-token");
+
+      // Coba akses endpoint yang butuh autentikasi
+      const result = await request(web)
+        .get("/api/users/current")
+        .set("Authorization", "Bearer test-token");
 
       expect(result.status).toBe(401);
       expect(result.body.error).toBe("Akses ditolak. Token tidak valid atau sudah expired.");
