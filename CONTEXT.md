@@ -179,11 +179,11 @@ PENDING → VERIFIED
 
 ### Tahap 1 — Auth & User (Fondasi)
 
-1. [ ] `POST /api/users` — Registrasi akun baru
-2. [ ] `POST /api/users/login` — Login untuk mendapatkan token akses
-3. [ ] `GET /api/users/current` — Mengambil profil user yang sedang login
-4. [ ] `PATCH /api/users/current` — Memperbarui profil user (nama, email, password)
-5. [ ] `DELETE /api/users/logout` — Menghapus token (Logout)
+1. [x] `POST /api/users` — Registrasi akun baru
+2. [x] `POST /api/users/login` — Login untuk mendapatkan token akses
+3. [x] `GET /api/users/current` — Mengambil profil user yang sedang login
+4. [x] `PATCH /api/users/current` — Memperbarui profil user (nama, email, password)
+5. [x] `DELETE /api/users/logout` — Menghapus token (Logout)
 
 ### Tahap 2 — Master Data Admin (Flavor, Size, Product, Variant)
 
@@ -260,6 +260,7 @@ PENDING → VERIFIED
 8. **Review Constraint**: User hanya bisa review setelah order berstatus `COMPLETED`, dan hanya bisa review 1x per produk per order.
 9. **Validation Messaging**: Pesan error Zod dikustomisasi menggunakan Bahasa Indonesia untuk kemudahan integrasi dengan Frontend.
 10. **Flat Rate Shipping**: Ongkir menggunakan flat rate per zona untuk tahap awal. Integrasi API ongkir (RajaOngkir) direncanakan untuk fase lanjutan.
+11. **Prisma 7 Driver Adapter**: Menggunakan `@prisma/adapter-pg` dan `pg` pool untuk koneksi database guna mendukung fleksibilitas konfigurasi di Prisma 7.
 
 ---
 
@@ -281,7 +282,7 @@ PENDING → VERIFIED
 1. Masuk ke folder backend: `cd backend`
 2. Install dependensi: `npm install` atau `bun install`
 3. Duplikat `.env.example` menjadi `.env` dan sesuaikan `DATABASE_URL` (PostgreSQL).
-4. Pastikan `DATABASE_URL` diatur di `prisma.config.ts` (URL di `schema.prisma` dihapus untuk kompatibilitas Prisma 7).
+4. Pastikan `DATABASE_URL` diatur di `.env`. Koneksi dikelola di `src/application/database.js` menggunakan driver adapter.
 5. Generate Prisma Client: `npx prisma generate`
 6. Sinkronisasi database: `npx prisma db push`
 7. Jalankan server dev: `npm run dev` atau `bun run dev`

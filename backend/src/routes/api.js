@@ -1,5 +1,6 @@
 import express from "express";
 import { authMiddleware } from "../middleware/auth-middleware.js";
+import userController from "../controller/user-controller.js";
 
 export const apiRouter = express.Router();
 
@@ -9,9 +10,9 @@ apiRouter.use(authMiddleware);
 // ==========================================
 // User Routes (Authorized)
 // ==========================================
-// TODO: GET /api/users/current — Profil user
-// TODO: PATCH /api/users/current — Update profil
-// TODO: DELETE /api/users/logout — Logout
+apiRouter.get("/api/users/current", userController.get);
+apiRouter.patch("/api/users/current", userController.update);
+apiRouter.delete("/api/users/logout", userController.logout);
 
 // ==========================================
 // Address Routes

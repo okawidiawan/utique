@@ -7,12 +7,13 @@
   "scripts": {
     "dev": "bun --watch src/index.js",
     "start": "bun src/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "bun test"
   },
   "keywords": ["cookies", "e-commerce", "pre-order"],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
@@ -21,10 +22,13 @@
     "express-rate-limit": "^8.5.1",
     "helmet": "^8.1.0",
     "nodemailer": "^8.0.7",
+    "pg": "^8.20.0",
     "uuid": "^14.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "prisma": "^7.8.0"
+    "@types/pg": "^8.20.0",
+    "prisma": "^7.8.0",
+    "supertest": "^7.2.2"
   }
 }
