@@ -20,7 +20,7 @@ Dokumen ini berfungsi sebagai ringkasan teknis dan arsitektur proyek Utique untu
 
 ### Backend
 
-- **Runtime**: Node.js
+- **Runtime**: [Node.js](https://nodejs.org/) / [Bun](https://bun.sh/)
 - **Framework**: Express.js
 - **ORM & Database**: Prisma dengan **PostgreSQL**
 - **Validation**: Zod untuk validasi request body & parameter
@@ -279,17 +279,17 @@ PENDING → VERIFIED
 ### Backend
 
 1. Masuk ke folder backend: `cd backend`
-2. Install dependensi: `npm install`
+2. Install dependensi: `npm install` atau `bun install`
 3. Duplikat `.env.example` menjadi `.env` dan sesuaikan `DATABASE_URL` (PostgreSQL)
 4. Generate Prisma Client: `npx prisma generate`
 5. Sinkronisasi database: `npx prisma db push`
-6. Jalankan server dev: `npm run dev`
+6. Jalankan server dev: `npm run dev` atau `bun run dev`
 
 ### Frontend
 
 1. Masuk ke folder frontend: `cd frontend`
-2. Install dependensi: `npm install`
-3. Jalankan aplikasi: `npm run dev`
+2. Install dependensi: `npm install` atau `bun install`
+3. Jalankan aplikasi: `npm run dev` atau `bun run dev`
 
 ---
 

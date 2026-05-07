@@ -8,6 +8,7 @@ Toko cookies online berbasis pre-order.
 
 | Layer | Teknologi |
 |---|---|
+| Runtime | Node.js / Bun |
 | Frontend | React.js (Vite) |
 | Backend | Express.js |
 | ORM | Prisma |
@@ -22,18 +23,18 @@ Toko cookies online berbasis pre-order.
 ```bash
 cd backend
 cp .env.example .env    # Sesuaikan DATABASE_URL
-npm install
+bun install             # atau npm install
 npx prisma generate
 npx prisma db push
-npm run dev             # http://localhost:5000
+bun run dev             # atau npm run dev → http://localhost:5000
 ```
 
 ### Frontend
 
 ```bash
 cd frontend
-npm install
-npm run dev             # http://localhost:5173
+bun install             # atau npm install
+bun run dev             # atau npm run dev → http://localhost:5173
 ```
 
 ## Dokumentasi
