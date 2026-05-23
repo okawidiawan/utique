@@ -2,6 +2,11 @@ import express from "express";
 import { authMiddleware } from "../middleware/auth-middleware.js";
 import { adminMiddleware } from "../middleware/admin-middleware.js";
 
+import flavorController from "../controller/flavor-controller.js";
+import sizeController from "../controller/size-controller.js";
+import productController from "../controller/product-controller.js";
+import variantController from "../controller/variant-controller.js";
+
 export const adminRouter = express.Router();
 
 // Semua route di bawah ini membutuhkan autentikasi + role ADMIN
@@ -11,24 +16,24 @@ adminRouter.use(adminMiddleware);
 // ==========================================
 // Flavor & Size Routes
 // ==========================================
-// TODO: POST /api/admin/flavors — Tambah rasa
-// TODO: GET /api/admin/flavors — List rasa
-// TODO: POST /api/admin/sizes — Tambah ukuran
-// TODO: GET /api/admin/sizes — List ukuran
+adminRouter.post("/api/admin/flavors", flavorController.create);
+adminRouter.get("/api/admin/flavors", flavorController.list);
+adminRouter.post("/api/admin/sizes", sizeController.create);
+adminRouter.get("/api/admin/sizes", sizeController.list);
 
 // ==========================================
 // Product Routes (Admin)
 // ==========================================
-// TODO: POST /api/admin/products — Tambah produk
-// TODO: PATCH /api/admin/products/:id — Update produk
-// TODO: DELETE /api/admin/products/:id — Hapus produk
+adminRouter.post("/api/admin/products", productController.create);
+adminRouter.patch("/api/admin/products/:id", productController.update);
+adminRouter.delete("/api/admin/products/:id", productController.remove);
 
 // ==========================================
 // Variant Routes
 // ==========================================
-// TODO: POST /api/admin/products/:id/variants — Tambah varian
-// TODO: PATCH /api/admin/variants/:id — Update varian
-// TODO: DELETE /api/admin/variants/:id — Hapus varian
+adminRouter.post("/api/admin/products/:id/variants", variantController.create);
+adminRouter.patch("/api/admin/variants/:id", variantController.update);
+adminRouter.delete("/api/admin/variants/:id", variantController.remove);
 
 // ==========================================
 // Order Management Routes
