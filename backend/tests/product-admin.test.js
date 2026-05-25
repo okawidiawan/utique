@@ -9,7 +9,10 @@ import {
   createTestProduct,
 } from "./test-util.js";
 
-describe("Product API", () => {
+// ==========================================
+// Product Admin API Tests — Unit test untuk CRUD produk admin
+// ==========================================
+describe("Product Admin API", () => {
   beforeEach(async () => {
     await createTestAdmin();
     await createTestUser();

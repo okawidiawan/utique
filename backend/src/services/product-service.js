@@ -1,131 +1,127 @@
 import { prisma } from "../application/database.js";
 import { ResponseError } from "../error/response-error.js";
 import {
-  createProductValidation,
-  updateProductValidation,
-  getProductValidation,
+  searchProductValidation,
+  getProductBySlugValidation,
 } from "../validation/product-validation.js";
 
 /**
- * Membuat slug ramah URL dari nama produk
- * @param {String} name - Nama produk
- * @returns {String} - Slug produk
+ * Mencari produk cookies dengan paginasi dan filter nama (Public)
+ * @param {Object} request - Query request berisi page, size, dan name
+ * @returns {Object} - List data produk beserta data paginasi
  */
-const generateSlug = (name) => {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)+/g, "");
-};
+const search = async (request) => {
+  // 1. Validasi request body/query menggunakan Zod
+  const searchRequest = searchProductValidation.parse(request);
 
-/**
- * Menambahkan Produk Baru (Admin Only)
- * @param {Object} request - Body request dari controller
- * @returns {Object} - Data produk yang berhasil dibuat
- */
-const create = async (request) => {
-  // 1. Validasi input menggunakan Zod
-  const product = createProductValidation.parse(request);
+  // 2. Tentukan pagination variables
+  const skip = (searchRequest.page - 1) * searchRequest.size;
+  const take = searchRequest.size;
 
-  // 2. Generate slug otomatis
-  const slug = generateSlug(product.name);
+  // 3. Susun filter query (hanya produk yang available)
+  const filters = [];
+  
+  // Hanya menampilkan produk yang isAvailable = true untuk publik
+  filters.push({ isAvailable: true });
 
-  // 3. Cek apakah slug sudah terdaftar
-  const countProduct = await prisma.product.count({
-    where: { slug },
-  });
-
-  if (countProduct === 1) {
-    throw new ResponseError(400, "Nama produk sudah digunakan (slug duplikat).");
-  }
-
-  // 4. Simpan ke database
-  return prisma.product.create({
-    data: {
-      ...product,
-      slug,
-    },
-  });
-};
-
-/**
- * Memperbarui Produk (Admin Only)
- * @param {Number} productId - ID produk dari parameter URL
- * @param {Object} request - Body request berisi field yang ingin diupdate
- * @returns {Object} - Data produk yang berhasil diupdate
- */
-const update = async (productId, request) => {
-  // 1. Validasi parameter ID
-  const id = getProductValidation.parse(productId);
-
-  // 2. Validasi body request
-  const updateRequest = updateProductValidation.parse(request);
-
-  // 3. Cek eksistensi produk
-  const productExist = await prisma.product.findUnique({
-    where: { id },
-  });
-
-  if (!productExist) {
-    throw new ResponseError(404, "Produk tidak ditemukan.");
-  }
-
-  const data = { ...updateRequest };
-
-  // 4. Jika nama produk diganti, re-generate slug dan cek keunikan
-  if (updateRequest.name) {
-    const slug = generateSlug(updateRequest.name);
-
-    const countProduct = await prisma.product.count({
-      where: {
-        slug,
-        NOT: { id },
+  if (searchRequest.name) {
+    filters.push({
+      name: {
+        contains: searchRequest.name,
+        mode: "insensitive",
       },
     });
-
-    if (countProduct === 1) {
-      throw new ResponseError(400, "Nama produk sudah digunakan (slug duplikat).");
-    }
-
-    data.slug = slug;
   }
 
-  // 5. Simpan perubahan ke database
-  return prisma.product.update({
-    where: { id },
-    data,
-  });
-};
-
-/**
- * Menghapus Produk beserta seluruh Varian Terkait (Admin Only)
- * @param {Number} productId - ID produk yang akan dihapus
- * @returns {String} - Pesan sukses
- */
-const remove = async (productId) => {
-  // 1. Validasi parameter ID
-  const id = getProductValidation.parse(productId);
-
-  // 2. Cek eksistensi produk
-  const productExist = await prisma.product.findUnique({
-    where: { id },
-  });
-
-  if (!productExist) {
-    throw new ResponseError(404, "Produk tidak ditemukan.");
-  }
-
-  // 3. Hapus relasi (varian) dan produk secara transaksional
-  await prisma.$transaction([
-    prisma.productVariant.deleteMany({
-      where: { productId: id },
+  // 4. Lakukan query data & total item secara paralel
+  const [products, totalItems] = await Promise.all([
+    prisma.product.findMany({
+      where: {
+        AND: filters,
+      },
+      skip,
+      take,
+      orderBy: {
+        id: "desc", // Default sorting produk terbaru di atas
+      },
+      include: {
+        variants: {
+          where: {
+            isAvailable: true,
+          },
+          include: {
+            flavor: true,
+            size: true,
+          },
+        },
+      },
     }),
-    prisma.product.delete({
-      where: { id },
+    prisma.product.count({
+      where: {
+        AND: filters,
+      },
     }),
   ]);
 
-  return "OK";
+  // 5. Hitung total halaman
+  const totalPages = Math.ceil(totalItems / searchRequest.size);
+
+  return {
+    data: products,
+    paging: {
+      page: searchRequest.page,
+      total_item: totalItems,
+      total_page: totalPages,
+    },
+  };
 };
 
-export default { create, update, remove };
+/**
+ * Mengambil detail produk beserta varian dan review berdasarkan slug (Public)
+ * @param {String} productSlug - Slug produk
+ * @returns {Object} - Detail produk lengkap
+ */
+const getBySlug = async (productSlug) => {
+  // 1. Validasi parameter slug
+  const slug = getProductBySlugValidation.parse(productSlug);
+
+  // 2. Ambil data produk beserta relasi variant & reviews
+  const product = await prisma.product.findFirst({
+    where: {
+      slug,
+      isAvailable: true, // Publik hanya boleh mengakses produk yang aktif/tersedia
+    },
+    include: {
+      variants: {
+        where: {
+          isAvailable: true,
+        },
+        include: {
+          flavor: true,
+          size: true,
+        },
+      },
+      reviews: {
+        include: {
+          user: {
+            select: {
+              name: true, // Ambil nama user saja untuk review
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      },
+    },
+  });
+
+  // 3. Jika produk tidak ditemukan atau tidak tersedia
+  if (!product) {
+    throw new ResponseError(404, "Produk tidak ditemukan.");
+  }
+
+  return product;
+};
+
+export default { search, getBySlug };
