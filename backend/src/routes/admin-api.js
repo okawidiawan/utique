@@ -2,10 +2,8 @@ import express from "express";
 import { authMiddleware } from "../middleware/auth-middleware.js";
 import { adminMiddleware } from "../middleware/admin-middleware.js";
 
-import flavorController from "../controller/flavor-controller.js";
-import sizeController from "../controller/size-controller.js";
-import productController from "../controller/product-controller.js";
-import variantController from "../controller/variant-controller.js";
+import masterAdminController from "../controller/master-admin-controller.js";
+import productAdminController from "../controller/product-admin-controller.js";
 
 export const adminRouter = express.Router();
 
@@ -16,24 +14,24 @@ adminRouter.use(adminMiddleware);
 // ==========================================
 // Flavor & Size Routes
 // ==========================================
-adminRouter.post("/api/admin/flavors", flavorController.create);
-adminRouter.get("/api/admin/flavors", flavorController.list);
-adminRouter.post("/api/admin/sizes", sizeController.create);
-adminRouter.get("/api/admin/sizes", sizeController.list);
+adminRouter.post("/api/admin/flavors", masterAdminController.createFlavor);
+adminRouter.get("/api/admin/flavors", masterAdminController.listFlavor);
+adminRouter.post("/api/admin/sizes", masterAdminController.createSize);
+adminRouter.get("/api/admin/sizes", masterAdminController.listSize);
 
 // ==========================================
 // Product Routes (Admin)
 // ==========================================
-adminRouter.post("/api/admin/products", productController.create);
-adminRouter.patch("/api/admin/products/:id", productController.update);
-adminRouter.delete("/api/admin/products/:id", productController.remove);
+adminRouter.post("/api/admin/products", productAdminController.create);
+adminRouter.patch("/api/admin/products/:id", productAdminController.update);
+adminRouter.delete("/api/admin/products/:id", productAdminController.remove);
 
 // ==========================================
 // Variant Routes
 // ==========================================
-adminRouter.post("/api/admin/products/:id/variants", variantController.create);
-adminRouter.patch("/api/admin/variants/:id", variantController.update);
-adminRouter.delete("/api/admin/variants/:id", variantController.remove);
+adminRouter.post("/api/admin/products/:id/variants", productAdminController.createVariant);
+adminRouter.patch("/api/admin/variants/:id", productAdminController.updateVariant);
+adminRouter.delete("/api/admin/variants/:id", productAdminController.removeVariant);
 
 // ==========================================
 // Order Management Routes

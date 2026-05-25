@@ -1,192 +1,112 @@
-# Implementasi Fitur Tahap 2: Master Data Admin (Flavor, Size, Product, Variant)
+# Implementasi Tahap 3: Produk Public (Customer Bisa Browse)
 
-Dokumen ini adalah panduan detail untuk mengimplementasikan fitur Tahap 2 pada backend Utique. Anda akan membuat API untuk mengelola master data produk (Flavor, Size, Product, dan Product Variant) yang hanya dapat diakses oleh Admin.
+## 📌 Deskripsi Tugas
+Melanjutkan pengembangan API dari tahap 2, pada tahap 3 ini kita akan mengimplementasikan API publik yang dapat diakses oleh customer (tanpa perlu token/login) untuk melihat katalog produk dan detail produk beserta varian dan review-nya.
 
-## Tujuan
-Membuat endpoint API CRUD untuk entitas `Flavor`, `Size`, `Product`, dan `ProductVariant` yang dilengkapi dengan validasi input (Zod), interaksi database (Prisma), dan ditutupi oleh unit test.
+Task ini mencakup pembuatan endpoint:
+1. `GET /api/products` — Mengambil list produk cookies (paginasi & filter).
+2. `GET /api/products/:slug` — Mengambil detail produk + varian + review.
 
-## Prasyarat & Konvensi
-1. **Konvensi Kode**:
-   - Controller: `backend/src/controller/[nama]-controller.js`
-   - Service: `backend/src/services/[nama]-service.js`
-   - Validation: `backend/src/validation/[nama]-validation.js`
-   - Route: `backend/src/routes/admin-api.js` (Gunakan `adminRouter`)
-2. **Keamanan**:
-   - Semua route di tahap ini **wajib** menggunakan `authMiddleware` dan `adminMiddleware`. Ini sudah disetup di `admin-api.js`, jadi Anda hanya perlu mendaftarkan route-nya.
-3. **Validasi**:
-   - Lakukan validasi input menggunakan Zod di layer **Service**.
-   - Pesan error Zod wajib dalam **Bahasa Indonesia**.
-4. **Error Handling**:
-   - Lempar `ResponseError` dari `src/error/response-error.js` jika ada error logika bisnis (misal: data tidak ditemukan).
-5. **Testing**:
-   - Buat file test di `backend/tests/[nama].test.js`.
-   - Wajib ada test untuk setiap endpoint (berhasil, gagal validasi, gagal error spesifik).
-   - Selalu bersihkan data testing di `beforeEach` dan `afterEach`.
+Dokumen ini disusun agar bisa dieksekusi langsung oleh Junior Programmer / AI Coder. Tolong baca dengan teliti arsitektur yang digunakan (`Router → Controller → Service → Prisma`) dan selalu ingat untuk memberikan komentar ber-Bahasa Indonesia di kode serta membuat unit test yang solid.
 
 ---
 
-## 1. Master Data: Flavor (Rasa)
+## 🛠️ Detail Implementasi (Langkah demi Langkah)
 
-### A. Endpoint 1: Tambah Rasa Baru
-- **Route**: `POST /api/admin/flavors`
-- **Request Body**:
-  ```json
-  { "name": "Choco Chip" }
-  ```
-- **Validasi Zod** (`createFlavorValidation`):
-  - `name`: string, min 1 ("Nama rasa wajib diisi."), max 50.
-- **Logika Service** (`flavor-service.js` - `create`):
-  1. Validasi request.
-  2. Cek apakah rasa dengan `name` tersebut sudah ada di database (`prisma.flavor.count`). Jika ya, lempar `ResponseError(400, "Rasa sudah ada.")`.
-  3. Simpan ke database (`prisma.flavor.create`).
-- **Response Sukses** (201 Created):
-  ```json
-  { "data": { "id": 1, "name": "Choco Chip", "createdAt": "..." } }
-  ```
+### 1. Buat Skema Validasi (Zod)
+**File:** `backend/src/validation/product-validation.js`
 
-### B. Endpoint 2: Ambil List Rasa
-- **Route**: `GET /api/admin/flavors`
-- **Logika Service** (`flavor-service.js` - `list`):
-  - Ambil semua rasa dari database, diurutkan berdasarkan `createdAt` asc atau `name` asc (`prisma.flavor.findMany`).
-- **Response Sukses** (200 OK):
-  ```json
-  { "data": [ { "id": 1, "name": "Choco Chip", "createdAt": "..." } ] }
-  ```
+Tambahkan skema validasi untuk request pencarian (search) produk publik:
+- **`searchProductValidation`**: 
+  - `page`: opsional, konversi string ke angka (coercion), default 1, min 1.
+  - `size`: opsional, konversi string ke angka (coercion), default 10, min 1.
+  - `name`: opsional, tipe string (untuk filter berdasarkan nama produk).
+- **`getProductValidation`**:
+  - `slug`: string tidak boleh kosong, max 100 karakter.
 
----
+> **Catatan:** Semua error message validasi Zod wajib berbahasa Indonesia (misal: `"Nama produk harus berupa teks"`).
 
-## 2. Master Data: Size (Ukuran)
+### 2. Implementasi Logika Bisnis (Service)
+**File:** `backend/src/services/product-service.js`
 
-### A. Endpoint 1: Tambah Ukuran Baru
-- **Route**: `POST /api/admin/sizes`
-- **Request Body**:
-  ```json
-  { "name": "Small", "description": "10pcs" }
-  ```
-- **Validasi Zod** (`createSizeValidation`):
-  - `name`: string, min 1 ("Nama ukuran wajib diisi."), max 50.
-  - `description`: string, max 100, optional.
-- **Logika Service** (`size-service.js` - `create`):
-  1. Validasi request.
-  2. Cek duplikasi `name` (misal: "Small" tidak boleh dua kali). Jika ada, lempar `ResponseError(400, "Ukuran sudah ada.")`.
-  3. Simpan ke database.
-- **Response Sukses** (201 Created):
-  ```json
-  { "data": { "id": 1, "name": "Small", "description": "10pcs", "createdAt": "..." } }
-  ```
+Tambahkan 2 fungsi baru (atau perbarui jika sudah ada):
 
-### B. Endpoint 2: Ambil List Ukuran
-- **Route**: `GET /api/admin/sizes`
-- **Logika Service** (`size-service.js` - `list`):
-  - Ambil semua ukuran dari database.
-- **Response Sukses** (200 OK):
-  ```json
-  { "data": [ { "id": 1, "name": "Small", "description": "10pcs" } ] }
-  ```
+- **`search(request)`**:
+  - Lakukan validasi `request` menggunakan `searchProductValidation`.
+  - Susun objek `where` (kondisi pencarian) untuk `prisma.product.findMany`.
+    - Jika `name` ada, gunakan `{ name: { contains: request.name, mode: 'insensitive' } }`.
+  - Lakukan paginasi dengan menghitung `skip = (page - 1) * size` dan menggunakan `take = size`.
+  - Eksekusi 2 query secara paralel (`Promise.all`): 
+    - `findMany` untuk mengambil produk (bisa di-include `ProductVariant` jika perlu untuk menampilkan harga mulai dari).
+    - `count` untuk total seluruh produk sesuai filter.
+  - Return hasil dengan format objek: `{ data: products, paging: { page, total_item, total_page } }`.
 
----
+- **`getBySlug(slug)`**:
+  - Lakukan validasi input `slug` menggunakan `getProductValidation`.
+  - Eksekusi `prisma.product.findUnique` dengan kondisi `slug`.
+  - **Relasi yang wajib di-include (`include` Prisma)**:
+    - `ProductVariant` (lakukan include secara bersarang/nested include ke dalam `Flavor` dan `Size` untuk mendapatkan nama rasa & ukuran).
+    - `Review` (Jika model `Review` sudah ada di schema. Jika belum, abaikan dulu atau berikan komen TODO untuk tahap 9).
+  - Jika produk tidak ditemukan, throw `new ResponseError(404, "Produk tidak ditemukan")`.
+  - Return data produk tersebut.
 
-## 3. Master Data: Product
+### 3. Implementasi Handler (Controller)
+**File:** `backend/src/controller/product-controller.js`
 
-*Catatan: Endpoint Product ini akan lebih kompleks karena membutuhkan handling Upload File. Anda dapat membuat mock-up endpoint jika sistem upload (Cloudinary) akan dikerjakan terpisah, atau langsung menggunakan `multer` (opsional jika dikoordinasikan).*
+Tambahkan 2 method controller baru:
 
-### A. Endpoint 1: Tambah Produk Baru
-- **Route**: `POST /api/admin/products`
-- **Request Body**:
-  - `name`: string
-  - `description`: string (optional)
-  - `productionTimeDays`: number (default 3)
-  - `isAvailable`: boolean (default true)
-  - `imageUrl`: string (Untuk saat ini, terima berupa string URL foto).
-- **Validasi Zod** (`createProductValidation`):
-  - `name`: string, min 1, max 100.
-  - `description`: string, optional.
-  - `productionTimeDays`: number, min 1, optional (default: 3).
-  - `isAvailable`: boolean, optional (default: true).
-  - `imageUrl`: string url / optional.
-- **Logika Service** (`product-service.js` - `create`):
-  1. Validasi request.
-  2. Buat `slug` otomatis dari `name` (misal: "Cookies Classic" -> "cookies-classic").
-  3. Cek apakah `slug` sudah dipakai. Jika ya, lempar `ResponseError(400, "Nama produk sudah digunakan (slug duplikat).")`.
-  4. Simpan ke database.
-- **Response Sukses** (201 Created): Data produk yang baru dibuat.
+- **`search(req, res, next)`**:
+  - Ambil parameter dari `req.query` (yaitu `page`, `size`, `name`).
+  - Kirim request tersebut ke `productService.search(request)`.
+  - Return response standard: `res.status(200).json({ data: result.data, paging: result.paging })`.
+  - Selalu bungkus kode dalam blok `try...catch` dan lempar error ke `next(e)` jika terjadi exception.
 
-### B. Endpoint 2: Update Produk
-- **Route**: `PATCH /api/admin/products/:id`
-- **Request Body**: Field produk yang mau diupdate (optional).
-- **Validasi Zod** (`updateProductValidation`): Mirip seperti `create` tapi semuanya `.optional()`. Jangan lupa sertakan validasi untuk param `:id` harus berupa number/string numerik.
-- **Logika Service** (`product-service.js` - `update`):
-  1. Validasi `id` dan body.
-  2. Pastikan produk exist. Lempar 404 jika tidak.
-  3. Jika ganti `name`, re-generate `slug` dan cek duplikat `slug` dengan `NOT { id: id }`.
-  4. Update produk di database.
+- **`getBySlug(req, res, next)`**:
+  - Ambil nilai `slug` dari `req.params.slug`.
+  - Panggil `productService.getBySlug(slug)`.
+  - Return response standard: `res.status(200).json({ data: result })`.
+  - Selalu bungkus kode dalam blok `try...catch` dan lempar error ke `next(e)` jika terjadi exception.
 
-### C. Endpoint 3: Hapus Produk
-- **Route**: `DELETE /api/admin/products/:id`
-- **Logika Service** (`product-service.js` - `remove`):
-  1. Validasi `id`.
-  2. Cek eksistensi produk. Lempar 404 jika tidak.
-  3. Hapus produk. (Pastikan Prisma cascade delete berjalan untuk varian, atau hapus varian terlebih dahulu manual di transaksi prisma jika dibutuhkan).
-- **Response Sukses** (200 OK): `{ "data": "OK" }`
+### 4. Daftarkan Rute (Router)
+**File:** `backend/src/routes/public-api.js`
+
+Router ini digunakan untuk API publik tanpa pengecekan middleware token/Auth.
+Tambahkan endpoint berikut:
+
+```javascript
+import express from 'express';
+import productController from '../controller/product-controller.js';
+
+export const publicRouter = express.Router();
+
+// Route untuk fitur public products
+publicRouter.get('/api/products', productController.search);
+publicRouter.get('/api/products/:slug', productController.getBySlug);
+```
+
+> **Catatan:** Pastikan `publicRouter` sudah diregistrasikan di `backend/src/application/web.js` dengan `app.use(publicRouter)`.
+
+### 5. Buat Unit Test (Testing)
+**File:** `backend/tests/product-public.test.js`
+
+Buat automated testing menggunakan Jest dan Supertest untuk menjamin API stabil.
+
+- **Setup Data (Test Util)**: Buat `createTestProduct()`, `createTestProductVariant()`, dan metode penghapusan di `afterEach()`.
+- **Skenario `GET /api/products`**:
+  1. Harus bisa mengembalikan list produk default (page 1, size 10) beserta property `paging`.
+  2. Harus bisa mencari produk spesifik berdasarkan query param `?name=...`.
+  3. Harus memproses pagination (perubahan `page` dan `size`) dengan benar.
+- **Skenario `GET /api/products/:slug`**:
+  1. Harus bisa mengembalikan detail produk secara utuh (beserta `ProductVariant`, `Flavor`, dan `Size`) jika `slug` valid.
+  2. Harus mengembalikan error HTTP `404` jika `slug` tidak terdaftar atau tidak valid.
 
 ---
 
-## 4. Master Data: Product Variant
+## ✅ Kriteria Penerimaan (Acceptance Criteria)
 
-Varian adalah kombinasi unik dari (Product, Flavor, Size).
-
-### A. Endpoint 1: Tambah Varian ke Produk
-- **Route**: `POST /api/admin/products/:id/variants`
-- **Request Body**:
-  ```json
-  {
-    "flavorId": 1,
-    "sizeId": 2,
-    "price": 25000,
-    "isAvailable": true
-  }
-  ```
-- **Validasi Zod** (`createVariantValidation`):
-  - `productId`: number (dari param url)
-  - `flavorId`: number
-  - `sizeId`: number
-  - `price`: number, min 1
-  - `isAvailable`: boolean, default true
-- **Logika Service** (`variant-service.js` - `create`):
-  1. Validasi request.
-  2. Pastikan `productId` valid dan ada. Lempar 404 jika produk tidak ada.
-  3. Pastikan `flavorId` dan `sizeId` valid dan ada di database. Lempar 400 jika tidak.
-  4. Cek kombinasi (productId, flavorId, sizeId) apakah sudah ada di database (`prisma.productVariant.findUnique`). Kombinasi ini memiliki constraint unique di schema. Jika sudah ada, lempar 400.
-  5. Simpan ke database (`prisma.productVariant.create`).
-- **Response Sukses** (201 Created).
-
-### B. Endpoint 2: Update Varian
-- **Route**: `PATCH /api/admin/variants/:id`
-- **Request Body**:
-  ```json
-  { "price": 30000, "isAvailable": false }
-  ```
-- **Validasi Zod** (`updateVariantValidation`):
-  - `price`: number, optional
-  - `isAvailable`: boolean, optional
-- **Logika Service** (`variant-service.js` - `update`):
-  1. Validasi `id` varian dan request body.
-  2. Cek apakah varian ada. Lempar 404 jika tidak.
-  3. Update data.
-
-### C. Endpoint 3: Hapus Varian
-- **Route**: `DELETE /api/admin/variants/:id`
-- **Logika Service** (`variant-service.js` - `remove`):
-  1. Validasi `id` varian.
-  2. Cek keberadaan varian. 404 jika tidak ada.
-  3. Hapus varian.
-
----
-
-## Langkah-langkah Implementasi yang Disarankan:
-1. Mulai dari **Flavor** (Validation -> Service -> Controller -> Routes -> Unit Test).
-2. Lanjut ke **Size** (Langkah sama seperti Flavor).
-3. Lanjut ke **Product** (Jangan lupa penanganan slug otomatis).
-4. Akhiri dengan **Product Variant** (Perhatikan relasinya dengan Product, Flavor, dan Size).
-5. Uji semua endpoint menggunakan Postman / via Unit Test (`npm run test`).
-6. Perbarui dokumentasi (termasuk JSDoc pada setiap method/fungsi baru di service).
+- [ ] Skema Zod sudah diatur dan menghasilkan pesan error bahasa Indonesia.
+- [ ] Logic Service dapat melakukan filter name case-insensitive & memproses return `paging`.
+- [ ] Endpoint `/api/products` dan `/api/products/:slug` sukses berjalan lewat `publicRouter`.
+- [ ] Jika slug salah/tidak ada, API memberikan status 404 Not Found dengan struktur JSON `error: ...`.
+- [ ] Semua perubahan diberi dokumentasi (komentar/docstring) yang jelas memakai bahasa Indonesia.
+- [ ] Minimal 5 unit tests (`GET /api/products` dan `GET /api/products/:slug`) lulus (PASSED) dengan benar.

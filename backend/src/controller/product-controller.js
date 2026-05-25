@@ -1,21 +1,27 @@
 import productService from "../services/product-service.js";
 
 // ==========================================
-// Product Controller — Handler untuk request HTTP domain Product (Admin)
+// Product Controller — Handler untuk request HTTP domain Product (Public)
 // Menghubungkan Router dengan Service layer.
 // ==========================================
 
 /**
- * Menangani request penambahan produk baru
+ * Menangani request pencarian/katalog produk publik
  * @param {Object} req - Express Request Object
  * @param {Object} res - Express Response Object
  * @param {Function} next - Express Next Middleware Function
  */
-const create = async (req, res, next) => {
+const search = async (req, res, next) => {
   try {
-    const result = await productService.create(req.body);
-    res.status(201).json({
-      data: result,
+    const request = {
+      name: req.query.name,
+      page: req.query.page,
+      size: req.query.size,
+    };
+    const result = await productService.search(request);
+    res.status(200).json({
+      data: result.data,
+      paging: result.paging,
     });
   } catch (e) {
     next(e);
@@ -23,15 +29,15 @@ const create = async (req, res, next) => {
 };
 
 /**
- * Menangani request pembaruan data produk
+ * Menangani request detail produk berdasarkan slug publik
  * @param {Object} req - Express Request Object
  * @param {Object} res - Express Response Object
  * @param {Function} next - Express Next Middleware Function
  */
-const update = async (req, res, next) => {
+const getBySlug = async (req, res, next) => {
   try {
-    const productId = Number(req.params.id);
-    const result = await productService.update(productId, req.body);
+    const slug = req.params.slug;
+    const result = await productService.getBySlug(slug);
     res.status(200).json({
       data: result,
     });
@@ -40,22 +46,4 @@ const update = async (req, res, next) => {
   }
 };
 
-/**
- * Menangani request penghapusan produk
- * @param {Object} req - Express Request Object
- * @param {Object} res - Express Response Object
- * @param {Function} next - Express Next Middleware Function
- */
-const remove = async (req, res, next) => {
-  try {
-    const productId = Number(req.params.id);
-    const result = await productService.remove(productId);
-    res.status(200).json({
-      data: result,
-    });
-  } catch (e) {
-    next(e);
-  }
-};
-
-export default { create, update, remove };
+export default { search, getBySlug };

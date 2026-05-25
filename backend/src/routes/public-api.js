@@ -1,5 +1,6 @@
 import express from "express";
 import userController from "../controller/user-controller.js";
+import productController from "../controller/product-controller.js";
 
 export const publicRouter = express.Router();
 
@@ -25,5 +26,6 @@ publicRouter.post("/api/users/login", userController.login);
 // ==========================================
 // Product Routes (Public)
 // ==========================================
-// TODO: GET /api/products — List produk
-// TODO: GET /api/products/:slug — Detail produk
+publicRouter.get("/api/products", productController.search);
+publicRouter.get("/api/products/:slug", productController.getBySlug);
+

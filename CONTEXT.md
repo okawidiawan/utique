@@ -187,21 +187,21 @@ PENDING → VERIFIED
 
 ### Tahap 2 — Master Data Admin (Flavor, Size, Product, Variant)
 
-6. [ ] `POST /api/admin/flavors` — Menambahkan rasa baru
-7. [ ] `GET /api/admin/flavors` — Mengambil list rasa
-8. [ ] `POST /api/admin/sizes` — Menambahkan ukuran baru
-9. [ ] `GET /api/admin/sizes` — Mengambil list ukuran
-10. [ ] `POST /api/admin/products` — Menambahkan produk baru (+ upload foto)
-11. [ ] `PATCH /api/admin/products/:id` — Memperbarui produk
-12. [ ] `DELETE /api/admin/products/:id` — Menghapus produk
-13. [ ] `POST /api/admin/products/:id/variants` — Menambahkan varian produk (flavor + size + harga)
-14. [ ] `PATCH /api/admin/variants/:id` — Memperbarui varian (harga, ketersediaan)
-15. [ ] `DELETE /api/admin/variants/:id` — Menghapus varian
+6. [x] `POST /api/admin/flavors` — Menambahkan rasa baru
+7. [x] `GET /api/admin/flavors` — Mengambil list rasa
+8. [x] `POST /api/admin/sizes` — Menambahkan ukuran baru
+9. [x] `GET /api/admin/sizes` — Mengambil list ukuran
+10. [x] `POST /api/admin/products` — Menambahkan produk baru (+ upload foto)
+11. [x] `PATCH /api/admin/products/:id` — Memperbarui produk
+12. [x] `DELETE /api/admin/products/:id` — Menghapus produk
+13. [x] `POST /api/admin/products/:id/variants` — Menambahkan varian produk (flavor + size + harga)
+14. [x] `PATCH /api/admin/variants/:id` — Memperbarui varian (harga, ketersediaan)
+15. [x] `DELETE /api/admin/variants/:id` — Menghapus varian
 
 ### Tahap 3 — Produk Public (Customer Bisa Browse)
 
-16. [ ] `GET /api/products` — Mengambil list produk cookies (paginasi & filter)
-17. [ ] `GET /api/products/:slug` — Mengambil detail produk + varian + review
+16. [x] `GET /api/products` — Mengambil list produk cookies (paginasi & filter)
+17. [x] `GET /api/products/:slug` — Mengambil detail produk + varian + review
 
 ### Tahap 4 — Alamat Pengiriman
 
