@@ -102,3 +102,24 @@ export const createTestVariant = async (productId, flavorId, sizeId) => {
   });
 };
 
+export const removeTestAddresses = async () => {
+  await prisma.address.deleteMany({});
+};
+
+export const createTestAddress = async (userId, customData = {}) => {
+  return prisma.address.create({
+    data: {
+      userId,
+      label: "Rumah Test",
+      recipientName: "Penerima Test",
+      phone: "081234567890",
+      province: "Provinsi Test",
+      city: "Kota Test",
+      district: "Kecamatan Test",
+      postalCode: "12345",
+      fullAddress: "Alamat Lengkap Test",
+      isDefault: false,
+      ...customData
+    }
+  });
+};

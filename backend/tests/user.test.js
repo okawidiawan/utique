@@ -1,14 +1,22 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import request from "supertest";
 import { web } from "../src/application/web.js";
-import { removeTestUser, createTestUser, getTestUser } from "./test-util.js";
+import {
+  removeTestUser,
+  createTestUser,
+  getTestUser,
+  removeTestAddresses,
+  createTestAddress,
+} from "./test-util.js";
 
 describe("User API", () => {
   beforeEach(async () => {
+    await removeTestAddresses();
     await removeTestUser();
   });
 
   afterEach(async () => {
+    await removeTestAddresses();
     await removeTestUser();
   });
 
@@ -312,6 +320,111 @@ describe("User API", () => {
 
       expect(result.status).toBe(401);
       expect(result.body.error).toBe("Akses ditolak. Token tidak valid atau sudah expired.");
+    });
+  });
+
+  describe("Address API", () => {
+    describe("POST /api/addresses", () => {
+      it("should can create new address", async () => {
+        await createTestUser();
+        const result = await request(web)
+          .post("/api/addresses")
+          .set("Authorization", "Bearer test-token")
+          .send({
+            label: "Rumah",
+            recipientName: "Budi",
+            phone: "081234567890",
+            province: "Jawa Timur",
+            city: "Surabaya",
+            district: "Gubeng",
+            postalCode: "60281",
+            fullAddress: "Jl. Kertajaya",
+            isDefault: true,
+          });
+
+        expect(result.status).toBe(201);
+        expect(result.body.data).toBe("OK");
+      });
+
+      it("should reject if request is invalid", async () => {
+        await createTestUser();
+        const result = await request(web)
+          .post("/api/addresses")
+          .set("Authorization", "Bearer test-token")
+          .send({
+            label: "",
+          });
+
+        expect(result.status).toBe(400);
+        expect(result.body.error).toBeDefined();
+      });
+
+      it("should reject if unauthorized", async () => {
+        const result = await request(web).post("/api/addresses").send({
+          label: "Rumah",
+        });
+
+        expect(result.status).toBe(401);
+      });
+    });
+
+    describe("GET /api/addresses", () => {
+      it("should can get list of addresses", async () => {
+        await createTestUser();
+        const user = await getTestUser();
+        await createTestAddress(user.id);
+
+        const result = await request(web)
+          .get("/api/addresses")
+          .set("Authorization", "Bearer test-token");
+
+        expect(result.status).toBe(200);
+        expect(result.body.data.length).toBe(1);
+        expect(result.body.data[0].label).toBe("Rumah Test");
+      });
+    });
+
+    describe("PATCH /api/addresses/:id", () => {
+      it("should can update address", async () => {
+        await createTestUser();
+        const user = await getTestUser();
+        const address = await createTestAddress(user.id);
+
+        const result = await request(web)
+          .patch(`/api/addresses/${address.id}`)
+          .set("Authorization", "Bearer test-token")
+          .send({
+            label: "Kantor",
+          });
+
+        expect(result.status).toBe(200);
+        expect(result.body.data.label).toBe("Kantor");
+      });
+
+      it("should reject if address not found", async () => {
+        await createTestUser();
+        const result = await request(web)
+          .patch(`/api/addresses/9999`)
+          .set("Authorization", "Bearer test-token")
+          .send({ label: "Kantor" });
+
+        expect(result.status).toBe(404);
+      });
+    });
+
+    describe("DELETE /api/addresses/:id", () => {
+      it("should can delete address", async () => {
+        await createTestUser();
+        const user = await getTestUser();
+        const address = await createTestAddress(user.id);
+
+        const result = await request(web)
+          .delete(`/api/addresses/${address.id}`)
+          .set("Authorization", "Bearer test-token");
+
+        expect(result.status).toBe(200);
+        expect(result.body.data).toBe("OK");
+      });
     });
   });
 });

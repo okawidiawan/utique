@@ -1,112 +1,331 @@
-# Implementasi Tahap 3: Produk Public (Customer Bisa Browse)
+# Feature: Implementasi API Alamat Pengiriman (Address)
 
-## 📌 Deskripsi Tugas
-Melanjutkan pengembangan API dari tahap 2, pada tahap 3 ini kita akan mengimplementasikan API publik yang dapat diakses oleh customer (tanpa perlu token/login) untuk melihat katalog produk dan detail produk beserta varian dan review-nya.
+## 1. Background & Tujuan
+Fitur ini bertujuan untuk mengelola alamat pengiriman (multiple addresses) milik pengguna (customer). Alamat ini akan digunakan di halaman checkout untuk menghitung ongkir dan menentukan destinasi pengiriman pesanan.
 
-Task ini mencakup pembuatan endpoint:
-1. `GET /api/products` — Mengambil list produk cookies (paginasi & filter).
-2. `GET /api/products/:slug` — Mengambil detail produk + varian + review.
-
-Dokumen ini disusun agar bisa dieksekusi langsung oleh Junior Programmer / AI Coder. Tolong baca dengan teliti arsitektur yang digunakan (`Router → Controller → Service → Prisma`) dan selalu ingat untuk memberikan komentar ber-Bahasa Indonesia di kode serta membuat unit test yang solid.
-
----
-
-## 🛠️ Detail Implementasi (Langkah demi Langkah)
-
-### 1. Buat Skema Validasi (Zod)
-**File:** `backend/src/validation/product-validation.js`
-
-Tambahkan skema validasi untuk request pencarian (search) produk publik:
-- **`searchProductValidation`**: 
-  - `page`: opsional, konversi string ke angka (coercion), default 1, min 1.
-  - `size`: opsional, konversi string ke angka (coercion), default 10, min 1.
-  - `name`: opsional, tipe string (untuk filter berdasarkan nama produk).
-- **`getProductValidation`**:
-  - `slug`: string tidak boleh kosong, max 100 karakter.
-
-> **Catatan:** Semua error message validasi Zod wajib berbahasa Indonesia (misal: `"Nama produk harus berupa teks"`).
-
-### 2. Implementasi Logika Bisnis (Service)
-**File:** `backend/src/services/product-service.js`
-
-Tambahkan 2 fungsi baru (atau perbarui jika sudah ada):
-
-- **`search(request)`**:
-  - Lakukan validasi `request` menggunakan `searchProductValidation`.
-  - Susun objek `where` (kondisi pencarian) untuk `prisma.product.findMany`.
-    - Jika `name` ada, gunakan `{ name: { contains: request.name, mode: 'insensitive' } }`.
-  - Lakukan paginasi dengan menghitung `skip = (page - 1) * size` dan menggunakan `take = size`.
-  - Eksekusi 2 query secara paralel (`Promise.all`): 
-    - `findMany` untuk mengambil produk (bisa di-include `ProductVariant` jika perlu untuk menampilkan harga mulai dari).
-    - `count` untuk total seluruh produk sesuai filter.
-  - Return hasil dengan format objek: `{ data: products, paging: { page, total_item, total_page } }`.
-
-- **`getBySlug(slug)`**:
-  - Lakukan validasi input `slug` menggunakan `getProductValidation`.
-  - Eksekusi `prisma.product.findUnique` dengan kondisi `slug`.
-  - **Relasi yang wajib di-include (`include` Prisma)**:
-    - `ProductVariant` (lakukan include secara bersarang/nested include ke dalam `Flavor` dan `Size` untuk mendapatkan nama rasa & ukuran).
-    - `Review` (Jika model `Review` sudah ada di schema. Jika belum, abaikan dulu atau berikan komen TODO untuk tahap 9).
-  - Jika produk tidak ditemukan, throw `new ResponseError(404, "Produk tidak ditemukan")`.
-  - Return data produk tersebut.
-
-### 3. Implementasi Handler (Controller)
-**File:** `backend/src/controller/product-controller.js`
-
-Tambahkan 2 method controller baru:
-
-- **`search(req, res, next)`**:
-  - Ambil parameter dari `req.query` (yaitu `page`, `size`, `name`).
-  - Kirim request tersebut ke `productService.search(request)`.
-  - Return response standard: `res.status(200).json({ data: result.data, paging: result.paging })`.
-  - Selalu bungkus kode dalam blok `try...catch` dan lempar error ke `next(e)` jika terjadi exception.
-
-- **`getBySlug(req, res, next)`**:
-  - Ambil nilai `slug` dari `req.params.slug`.
-  - Panggil `productService.getBySlug(slug)`.
-  - Return response standard: `res.status(200).json({ data: result })`.
-  - Selalu bungkus kode dalam blok `try...catch` dan lempar error ke `next(e)` jika terjadi exception.
-
-### 4. Daftarkan Rute (Router)
-**File:** `backend/src/routes/public-api.js`
-
-Router ini digunakan untuk API publik tanpa pengecekan middleware token/Auth.
-Tambahkan endpoint berikut:
-
-```javascript
-import express from 'express';
-import productController from '../controller/product-controller.js';
-
-export const publicRouter = express.Router();
-
-// Route untuk fitur public products
-publicRouter.get('/api/products', productController.search);
-publicRouter.get('/api/products/:slug', productController.getBySlug);
-```
-
-> **Catatan:** Pastikan `publicRouter` sudah diregistrasikan di `backend/src/application/web.js` dengan `app.use(publicRouter)`.
-
-### 5. Buat Unit Test (Testing)
-**File:** `backend/tests/product-public.test.js`
-
-Buat automated testing menggunakan Jest dan Supertest untuk menjamin API stabil.
-
-- **Setup Data (Test Util)**: Buat `createTestProduct()`, `createTestProductVariant()`, dan metode penghapusan di `afterEach()`.
-- **Skenario `GET /api/products`**:
-  1. Harus bisa mengembalikan list produk default (page 1, size 10) beserta property `paging`.
-  2. Harus bisa mencari produk spesifik berdasarkan query param `?name=...`.
-  3. Harus memproses pagination (perubahan `page` dan `size`) dengan benar.
-- **Skenario `GET /api/products/:slug`**:
-  1. Harus bisa mengembalikan detail produk secara utuh (beserta `ProductVariant`, `Flavor`, dan `Size`) jika `slug` valid.
-  2. Harus mengembalikan error HTTP `404` jika `slug` tidak terdaftar atau tidak valid.
+Keamanan data (data isolation) harus diutamakan:
+- Pengguna wajib terautentikasi (mempunyai token Bearer).
+- Pengguna hanya boleh menambahkan, melihat, mengubah, dan menghapus alamat milik mereka sendiri.
+- Pengguna tidak boleh mengakses atau memanipulasi alamat milik pengguna lain dengan cara apa pun (misalnya dengan mengganti `:id` di URL).
 
 ---
 
-## ✅ Kriteria Penerimaan (Acceptance Criteria)
+## 2. Spesifikasi Teknis
 
-- [ ] Skema Zod sudah diatur dan menghasilkan pesan error bahasa Indonesia.
-- [ ] Logic Service dapat melakukan filter name case-insensitive & memproses return `paging`.
-- [ ] Endpoint `/api/products` dan `/api/products/:slug` sukses berjalan lewat `publicRouter`.
-- [ ] Jika slug salah/tidak ada, API memberikan status 404 Not Found dengan struktur JSON `error: ...`.
-- [ ] Semua perubahan diberi dokumentasi (komentar/docstring) yang jelas memakai bahasa Indonesia.
-- [ ] Minimal 5 unit tests (`GET /api/products` dan `GET /api/products/:slug`) lulus (PASSED) dengan benar.
+### Database Schema Reference (`Address`)
+Berdasarkan `prisma.schema`, berikut adalah kolom tabel `addresses`:
+- `id`: `Int` (Autoincrement, Primary Key)
+- `userId`: `Int` (Foreign Key ke tabel `User`)
+- `label`: `String` (Max 50, contoh: "Rumah", "Kantor")
+- `recipientName`: `String` (Max 100)
+- `phone`: `String` (Max 20)
+- `province`: `String` (Max 100)
+- `city`: `String` (Max 100)
+- `district`: `String` (Max 100)
+- `postalCode`: `String` (Max 10)
+- `fullAddress`: `String` (Text)
+- `isDefault`: `Boolean` (Default: `false`)
+- `createdAt`: `DateTime`
+- `updatedAt`: `DateTime`
+
+### Endpoints & Flow
+
+#### A. POST `/api/addresses` (Tambah Alamat)
+- **Authentication**: Token Bearer (Wajib)
+- **Request Body**:
+  ```json
+  {
+    "label": "Rumah",
+    "recipientName": "Budi Santoso",
+    "phone": "081234567890",
+    "province": "Jawa Timur",
+    "city": "Surabaya",
+    "district": "Gubeng",
+    "postalCode": "60281",
+    "fullAddress": "Jl. Kertajaya No. 123, RT 01 RW 02",
+    "isDefault": true
+  }
+  ```
+- **Response Success (201 Created atau 200 OK)**:
+  ```json
+  {
+    "data": "OK"
+  }
+  ```
+- **Response Error (400 Bad Request / 401 Unauthorized)**:
+  - Validasi gagal: `{ "error": "Nama penerima wajib diisi." }`
+  - Tidak terautentikasi: `{ "error": "Akses ditolak. Token tidak ditemukan." }`
+
+#### B. GET `/api/addresses` (Ambil Daftar Alamat)
+- **Authentication**: Token Bearer (Wajib)
+- **Request Body**: None
+- **Response Success (200 OK)**:
+  ```json
+  {
+    "data": [
+      {
+        "id": 1,
+        "userId": 5,
+        "label": "Rumah",
+        "recipientName": "Budi Santoso",
+        "phone": "081234567890",
+        "province": "Jawa Timur",
+        "city": "Surabaya",
+        "district": "Gubeng",
+        "postalCode": "60281",
+        "fullAddress": "Jl. Kertajaya No. 123, RT 01 RW 02",
+        "isDefault": true,
+        "createdAt": "2026-05-28T00:00:00.000Z",
+        "updatedAt": "2026-05-28T00:00:00.000Z"
+      }
+    ]
+  }
+  ```
+- **Response Error (401 Unauthorized)**:
+  - Tidak terautentikasi: `{ "error": "Akses ditolak. Token tidak ditemukan." }`
+
+#### C. PATCH `/api/addresses/:id` (Ubah Alamat)
+- **Authentication**: Token Bearer (Wajib)
+- **URL Parameter**: `id` (Integer)
+- **Request Body** (Partial Update / Opsional):
+  ```json
+  {
+    "label": "Kantor",
+    "isDefault": false
+  }
+  ```
+- **Response Success (200 OK)**:
+  ```json
+  {
+    "data": {
+      "id": 1,
+      "userId": 5,
+      "label": "Kantor",
+      "recipientName": "Budi Santoso",
+      "phone": "081234567890",
+      "province": "Jawa Timur",
+      "city": "Surabaya",
+      "district": "Gubeng",
+      "postalCode": "60281",
+      "fullAddress": "Jl. Kertajaya No. 123, RT 01 RW 02",
+      "isDefault": false,
+      "createdAt": "2026-05-28T00:00:00.000Z",
+      "updatedAt": "2026-05-28T00:10:00.000Z"
+    }
+  }
+  ```
+- **Response Error (400 / 401 / 404)**:
+  - Alamat tidak ada / milik user lain: `{ "error": "Alamat tidak ditemukan." }` (Status `404 Not Found`)
+  - Validasi gagal: `{ "error": "Nomor telepon maksimal 20 karakter." }` (Status `400 Bad Request`)
+
+#### D. DELETE `/api/addresses/:id` (Hapus Alamat)
+- **Authentication**: Token Bearer (Wajib)
+- **URL Parameter**: `id` (Integer)
+- **Request Body**: None
+- **Response Success (200 OK)**:
+  ```json
+  {
+    "data": "OK"
+  }
+  ```
+- **Response Error (401 / 404)**:
+  - Alamat tidak ada / milik user lain: `{ "error": "Alamat tidak ditemukan." }` (Status `404 Not Found`)
+
+---
+
+## 3. Step-by-Step Implementasi Per File
+
+### Langkah 1: Buat File Validasi Baru `backend/src/validation/address-validation.js`
+1. Gunakan library Zod (`z`) untuk memvalidasi request body.
+2. Buat skema `createAddressValidation` dengan ketentuan:
+   - `label`: string, minimal 1, maksimal 50, error: "Label wajib diisi." / "Label maksimal 50 karakter."
+   - `recipientName`: string, minimal 1, maksimal 100, error: "Nama penerima wajib diisi." / "Nama penerima maksimal 100 karakter."
+   - `phone`: string, minimal 1, maksimal 20, error: "Nomor telepon wajib diisi." / "Nomor telepon maksimal 20 karakter."
+   - `province`: string, minimal 1, maksimal 100, error: "Provinsi wajib diisi." / "Provinsi maksimal 100 karakter."
+   - `city`: string, minimal 1, maksimal 100, error: "Kota wajib diisi." / "Kota maksimal 100 karakter."
+   - `district`: string, minimal 1, maksimal 100, error: "Kecamatan wajib diisi." / "Kecamatan maksimal 100 karakter."
+   - `postalCode`: string, minimal 1, maksimal 10, error: "Kode pos wajib diisi." / "Kode pos maksimal 10 karakter."
+   - `fullAddress`: string, minimal 1, error: "Alamat lengkap wajib diisi."
+   - `isDefault`: boolean, opsional (default: `false` di tingkat skema atau DB).
+3. Buat skema `updateAddressValidation` dengan ketentuan field yang sama, namun buat seluruh field menjadi `.optional()`.
+4. Export kedua skema tersebut.
+
+### Langkah 2: Edit Layanan Pengguna `backend/src/services/user-service.js`
+1. Import `createAddressValidation` dan `updateAddressValidation` dari `../validation/address-validation.js`.
+2. Implementasikan function **`createAddress`**:
+   - Signature: `const createAddress = async (userId, request) => { ... }`
+   - Validasi parameter `request` menggunakan `createAddressValidation.parse(request)`.
+   - **Logika Default Address**: Jika data alamat baru diset `isDefault: true`, lakukan update pada semua alamat milik user tersebut (`userId`) agar `isDefault: false` terlebih dahulu:
+     ```javascript
+     if (addressRequest.isDefault) {
+       await prisma.address.updateMany({
+         where: { userId, isDefault: true },
+         data: { isDefault: false }
+       });
+     }
+     ```
+   - Lakukan penyimpanan alamat ke database:
+     ```javascript
+     await prisma.address.create({
+       data: {
+         ...addressRequest,
+         userId: userId
+       }
+     });
+     ```
+   - Return string `"OK"`.
+3. Implementasikan function **`listAddresses`**:
+   - Signature: `const listAddresses = async (userId) => { ... }`
+   - Ambil data semua alamat milik `userId` di database menggunakan `prisma.address.findMany` diurutkan berdasarkan `isDefault` desc (agar default address di atas) lalu `createdAt` desc.
+   - Return array data alamat.
+4. Implementasikan function **`updateAddress`**:
+   - Signature: `const updateAddress = async (userId, addressId, request) => { ... }`
+   - Validasi input menggunakan `updateAddressValidation.parse(request)`.
+   - Periksa apakah alamat dengan `id: addressId` dan `userId: userId` terdaftar. Jika tidak ada, lempar `ResponseError(404, "Alamat tidak ditemukan.")`.
+   - **Logika Default Address**: Jika input di-update menjadi `isDefault: true`, nonaktifkan `isDefault` pada alamat lain milik user tersebut.
+   - Update alamat menggunakan `prisma.address.update` dengan filter `where: { id: addressId }`.
+   - Return data alamat yang berhasil diperbarui.
+5. Implementasikan function **`deleteAddress`**:
+   - Signature: `const deleteAddress = async (userId, addressId) => { ... }`
+   - Periksa apakah alamat dengan `id: addressId` dan `userId: userId` terdaftar. Jika tidak ada, lempar `ResponseError(404, "Alamat tidak ditemukan.")`.
+   - Hapus alamat menggunakan `prisma.address.delete` dengan filter `where: { id: addressId }`.
+   - Return string `"OK"`.
+6. Daftarkan dan export fungsi-fungsi baru tersebut pada `export default { ..., createAddress, listAddresses, updateAddress, deleteAddress }`.
+
+### Langkah 3: Edit Controller `backend/src/controller/user-controller.js`
+1. Tambahkan fungsi handler berikut:
+   - **`createAddress`**:
+     ```javascript
+     const createAddress = async (req, res, next) => {
+       try {
+         const userId = req.user.id;
+         const result = await userService.createAddress(userId, req.body);
+         res.status(201).json({ data: result });
+       } catch (e) {
+         next(e);
+       }
+     };
+     ```
+   - **`listAddresses`**:
+     ```javascript
+     const listAddresses = async (req, res, next) => {
+       try {
+         const userId = req.user.id;
+         const result = await userService.listAddresses(userId);
+         res.status(200).json({ data: result });
+       } catch (e) {
+         next(e);
+       }
+     };
+     ```
+   - **`updateAddress`**:
+     ```javascript
+     const updateAddress = async (req, res, next) => {
+       try {
+         const userId = req.user.id;
+         const addressId = parseInt(req.params.id);
+         const result = await userService.updateAddress(userId, addressId, req.body);
+         res.status(200).json({ data: result });
+       } catch (e) {
+         next(e);
+       }
+     };
+     ```
+   - **`deleteAddress`**:
+     ```javascript
+     const deleteAddress = async (req, res, next) => {
+       try {
+         const userId = req.user.id;
+         const addressId = parseInt(req.params.id);
+         const result = await userService.deleteAddress(userId, addressId);
+         res.status(200).json({ data: result });
+       } catch (e) {
+         next(e);
+       }
+     };
+     ```
+2. Daftarkan dan export handler ini di `export default { ..., createAddress, listAddresses, updateAddress, deleteAddress }`.
+
+### Langkah 4: Edit Router `backend/src/routes/api.js`
+1. Daftarkan endpoint-endpoint alamat pada area `// Address Routes` di dalam `apiRouter` (yang menggunakan `authMiddleware`):
+   ```javascript
+   apiRouter.post("/api/addresses", userController.createAddress);
+   apiRouter.get("/api/addresses", userController.listAddresses);
+   apiRouter.patch("/api/addresses/:id", userController.updateAddress);
+   apiRouter.delete("/api/addresses/:id", userController.deleteAddress);
+   ```
+
+### Langkah 5: Edit Test Utility `backend/tests/test-util.js`
+1. Buat helper untuk menghapus semua data alamat:
+   ```javascript
+   export const removeTestAddresses = async () => {
+     await prisma.address.deleteMany({});
+   };
+   ```
+2. Buat helper untuk membuat alamat uji coba:
+   ```javascript
+   export const createTestAddress = async (userId, customData = {}) => {
+     return prisma.address.create({
+       data: {
+         userId,
+         label: "Rumah Test",
+         recipientName: "Penerima Test",
+         phone: "081234567890",
+         province: "Provinsi Test",
+         city: "Kota Test",
+         district: "Kecamatan Test",
+         postalCode: "12345",
+         fullAddress: "Alamat Lengkap Test",
+         isDefault: false,
+         ...customData
+       }
+     });
+   };
+   ```
+3. Export kedua helper ini.
+
+### Langkah 6: Tambahkan Unit Test di `backend/tests/user.test.js`
+1. Pastikan import `removeTestAddresses` dan `createTestAddress` ditambahkan dari `./test-util.js`.
+2. Di dalam hook `beforeEach` dan `afterEach` yang ada, pastikan juga memanggil `await removeTestAddresses()`.
+3. Buat blok test baru `describe("Address API", () => { ... })` di dalam suite `User API`.
+4. Implementasikan test case berikut:
+   - **POST `/api/addresses`**:
+     - Berhasil menambahkan alamat baru dengan token valid (kembalian `201` atau `200` dengan `{ data: "OK" }`).
+     - Gagal jika token tidak dikirim / tidak valid (`401 unauthorized`).
+     - Gagal jika validasi request body tidak terpenuhi (`400 Bad Request` dengan pesan error bahasa Indonesia, misal "Nama penerima wajib diisi.").
+     - Logika `isDefault` bekerja (jika alamat baru `isDefault: true`, alamat lama milik user yang sama harus otomatis menjadi `isDefault: false`).
+   - **GET `/api/addresses`**:
+     - Berhasil mengambil daftar alamat milik user yang login.
+     - Hanya menampilkan alamat milik user tersebut (data isolation), tidak boleh ada alamat milik user lain yang bocor di response.
+     - Gagal jika token tidak valid (`401 unauthorized`).
+   - **PATCH `/api/addresses/:id`**:
+     - Berhasil memperbarui alamat milik sendiri (kembalian `200` dengan data yang diupdate).
+     - Gagal jika mencoba memperbarui alamat milik user lain (kembalian `404 Alamat tidak ditemukan.`).
+     - Gagal jika alamat tidak terdaftar (`404 Alamat tidak ditemukan.`).
+     - Gagal jika validasi body tidak sesuai (`400 Bad Request`).
+   - **DELETE `/api/addresses/:id`**:
+     - Berhasil menghapus alamat milik sendiri (kembalian `200` dengan `{ data: "OK" }`).
+     - Gagal jika mencoba menghapus alamat milik user lain (kembalian `404 Alamat tidak ditemukan.`).
+     - Gagal jika alamat tidak terdaftar (`404 Alamat tidak ditemukan.`).
+
+---
+
+## 4. Acceptance Criteria
+
+- [ ] **Auth Enforcement**: Semua API (`POST`, `GET`, `PATCH`, `DELETE`) pada path `/api/addresses` menolak request tanpa token Bearer yang valid dengan status code `401` dan error message sesuai middleware.
+- [ ] **Data Isolation (Security)**:
+  - [ ] `GET /api/addresses` hanya menampilkan data alamat milik user yang login (tidak boleh menampilkan milik user lain).
+  - [ ] `PATCH /api/addresses/:id` mengembalikan `404` (Alamat tidak ditemukan.) jika `:id` yang dikirim adalah milik user lain.
+  - [ ] `DELETE /api/addresses/:id` mengembalikan `404` (Alamat tidak ditemukan.) jika `:id` yang dikirim adalah milik user lain.
+- [ ] **Validasi Request**:
+  - [ ] Input data alamat di-parse oleh Zod schema.
+  - [ ] Jika field wajib tidak terisi atau panjang karakter melanggar batasan, kembalikan status `400` dengan pesan error Bahasa Indonesia.
+- [ ] **Default Address Toggle**:
+  - [ ] Jika alamat baru diset `isDefault: true`, semua alamat lain milik user tersebut berubah menjadi `isDefault: false` secara otomatis.
+- [ ] **Success Response Format**:
+  - [ ] `POST /api/addresses` mengembalikan format `{ "data": "OK" }`.
+  - [ ] `DELETE /api/addresses/:id` mengembalikan format `{ "data": "OK" }`.
+  - [ ] `GET /api/addresses` mengembalikan format `{ "data": [...] }`.
+  - [ ] `PATCH /api/addresses/:id` mengembalikan format `{ "data": { ... } }` berisi object alamat terbaru.
+- [ ] **Unit Tests**:
+  - [ ] Semua skenario pengujian di `tests/user.test.js` berjalan sukses tanpa error dengan command testing yang digunakan proyek (`bun test tests/user.test.js` atau sejenisnya).
