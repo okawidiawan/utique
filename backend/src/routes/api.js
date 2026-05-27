@@ -17,10 +17,10 @@ apiRouter.delete("/api/users/logout", userController.logout);
 // ==========================================
 // Address Routes
 // ==========================================
-// TODO: POST /api/addresses — Tambah alamat
-// TODO: GET /api/addresses — List alamat
-// TODO: PATCH /api/addresses/:id — Update alamat
-// TODO: DELETE /api/addresses/:id — Hapus alamat
+apiRouter.post("/api/addresses", userController.createAddress);
+apiRouter.get("/api/addresses", userController.listAddresses);
+apiRouter.patch("/api/addresses/:id", userController.updateAddress);
+apiRouter.delete("/api/addresses/:id", userController.deleteAddress);
 
 // ==========================================
 // Cart Routes
