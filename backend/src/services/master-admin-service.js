@@ -1,9 +1,6 @@
 import { prisma } from "../application/database.js";
 import { ResponseError } from "../error/response-error.js";
-import {
-  createFlavorValidation,
-  createSizeValidation,
-} from "../validation/master-admin-validation.js";
+import { createFlavorValidation, createSizeValidation } from "../validation/master-admin-validation.js";
 
 // ==========================================
 // Master Admin Service — Logika bisnis untuk domain Flavor & Size
@@ -23,7 +20,7 @@ const createFlavor = async (request) => {
     where: { name: flavor.name },
   });
 
-  if (countFlavor === 1) {
+  if (countFlavor > 0) {
     throw new ResponseError(400, "Rasa sudah ada.");
   }
 
@@ -69,7 +66,7 @@ const createSize = async (request) => {
     where: { name: size.name },
   });
 
-  if (countSize === 1) {
+  if (countSize > 0) {
     throw new ResponseError(400, "Ukuran sudah ada.");
   }
 

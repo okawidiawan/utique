@@ -108,21 +108,21 @@ utique/
 
 ### Tabel Utama
 
-| Tabel | Deskripsi |
-|---|---|
-| `User` | Data pengguna (customer & admin), dibedakan dengan field `role` |
-| `Address` | Alamat pengiriman milik user, mendukung multiple alamat |
-| `Product` | Data master cookies (nama, deskripsi, foto, waktu produksi) |
-| `Flavor` | Master varian rasa (Choco Chip, Red Velvet, dll) |
-| `Size` | Master varian ukuran (Small/10pcs, Medium/20pcs, dll) |
-| `ProductVariant` | Kombinasi Product + Flavor + Size dengan harga spesifik |
-| `Cart` | Keranjang belanja, 1 cart per user |
-| `CartItem` | Item di keranjang, mereferensikan `ProductVariant` |
-| `Order` | Pesanan yang sudah di-checkout |
-| `OrderItem` | Item dalam order, menyimpan snapshot data produk |
-| `Payment` | Bukti pembayaran (upload bukti transfer) |
-| `Review` | Review & rating (1-5) dari customer |
-| `ProductionQueue` | Antrian produksi, digunakan untuk kalkulasi estimasi |
+| Tabel             | Deskripsi                                                       |
+| ----------------- | --------------------------------------------------------------- |
+| `User`            | Data pengguna (customer & admin), dibedakan dengan field `role` |
+| `Address`         | Alamat pengiriman milik user, mendukung multiple alamat         |
+| `Product`         | Data master cookies (nama, deskripsi, foto, waktu produksi)     |
+| `Flavor`          | Master varian rasa (Choco Chip, Red Velvet, dll)                |
+| `Size`            | Master varian ukuran (Small/10pcs, Medium/20pcs, dll)           |
+| `ProductVariant`  | Kombinasi Product + Flavor + Size dengan harga spesifik         |
+| `Cart`            | Keranjang belanja, 1 cart per user                              |
+| `CartItem`        | Item di keranjang, mereferensikan `ProductVariant`              |
+| `Order`           | Pesanan yang sudah di-checkout                                  |
+| `OrderItem`       | Item dalam order, menyimpan snapshot data produk                |
+| `Payment`         | Bukti pembayaran (upload bukti transfer)                        |
+| `Review`          | Review & rating (1-5) dari customer                             |
+| `ProductionQueue` | Antrian produksi, digunakan untuk kalkulasi estimasi            |
 
 ### Status Flow — Order
 
@@ -147,29 +147,29 @@ PENDING → VERIFIED
 
 ### Customer Pages
 
-| Halaman | Route | Deskripsi |
-|---|---|---|
-| Home / Landing | `/` | Halaman utama, highlight produk |
-| Katalog | `/products` | Daftar semua cookies |
-| Detail Produk | `/products/:slug` | Detail cookies + pilih varian + add to cart |
-| Keranjang | `/cart` | Daftar item di keranjang |
-| Checkout | `/checkout` | Pilih alamat, review pesanan |
-| Pembayaran | `/payment/:orderId` | Info rekening toko + upload bukti bayar |
-| Riwayat Pesanan | `/orders` | Daftar semua pesanan user |
-| Detail Pesanan | `/orders/:id` | Status, estimasi, resi, link tracking |
-| Profil | `/profile` | Edit profil & kelola alamat |
-| Login | `/login` | Halaman login |
-| Register | `/register` | Halaman registrasi |
+| Halaman         | Route               | Deskripsi                                   |
+| --------------- | ------------------- | ------------------------------------------- |
+| Home / Landing  | `/`                 | Halaman utama, highlight produk             |
+| Katalog         | `/products`         | Daftar semua cookies                        |
+| Detail Produk   | `/products/:slug`   | Detail cookies + pilih varian + add to cart |
+| Keranjang       | `/cart`             | Daftar item di keranjang                    |
+| Checkout        | `/checkout`         | Pilih alamat, review pesanan                |
+| Pembayaran      | `/payment/:orderId` | Info rekening toko + upload bukti bayar     |
+| Riwayat Pesanan | `/orders`           | Daftar semua pesanan user                   |
+| Detail Pesanan  | `/orders/:id`       | Status, estimasi, resi, link tracking       |
+| Profil          | `/profile`          | Edit profil & kelola alamat                 |
+| Login           | `/login`            | Halaman login                               |
+| Register        | `/register`         | Halaman registrasi                          |
 
 ### Admin Pages
 
-| Halaman | Route | Deskripsi |
-|---|---|---|
-| Dashboard | `/admin` | Overview order & ringkasan hari ini |
-| Manajemen Produk | `/admin/products` | CRUD produk cookies |
-| Form Produk | `/admin/products/new`, `/admin/products/:id/edit` | Tambah/edit produk + upload foto |
-| Manajemen Order | `/admin/orders` | Daftar semua order |
-| Detail Order | `/admin/orders/:id` | Konfirmasi bayar, update status, input resi |
+| Halaman          | Route                                             | Deskripsi                                   |
+| ---------------- | ------------------------------------------------- | ------------------------------------------- |
+| Dashboard        | `/admin`                                          | Overview order & ringkasan hari ini         |
+| Manajemen Produk | `/admin/products`                                 | CRUD produk cookies                         |
+| Form Produk      | `/admin/products/new`, `/admin/products/:id/edit` | Tambah/edit produk + upload foto            |
+| Manajemen Order  | `/admin/orders`                                   | Daftar semua order                          |
+| Detail Order     | `/admin/orders/:id`                               | Konfirmasi bayar, update status, input resi |
 
 ---
 
@@ -205,10 +205,10 @@ PENDING → VERIFIED
 
 ### Tahap 4 — Alamat Pengiriman
 
-18. [ ] `POST /api/addresses` — Menambahkan alamat baru
-19. [ ] `GET /api/addresses` — Mengambil list alamat user
-20. [ ] `PATCH /api/addresses/:id` — Memperbarui alamat
-21. [ ] `DELETE /api/addresses/:id` — Menghapus alamat
+18. [x] `POST /api/addresses` — Menambahkan alamat baru
+19. [x] `GET /api/addresses` — Mengambil list alamat user
+20. [x] `PATCH /api/addresses/:id` — Memperbarui alamat
+21. [x] `DELETE /api/addresses/:id` — Menghapus alamat
 
 ### Tahap 5 — Keranjang (Cart)
 
@@ -266,12 +266,12 @@ PENDING → VERIFIED
 
 ## 9. Hosting & Deployment
 
-| Service | Fungsi |
-|---|---|
-| **Vercel** | Deploy frontend React |
-| **Railway** atau **Render** | Deploy backend Express |
-| **Neon** atau **Supabase** | PostgreSQL database |
-| **Cloudinary** | Upload & serve foto produk |
+| Service                     | Fungsi                     |
+| --------------------------- | -------------------------- |
+| **Vercel**                  | Deploy frontend React      |
+| **Railway** atau **Render** | Deploy backend Express     |
+| **Neon** atau **Supabase**  | PostgreSQL database        |
+| **Cloudinary**              | Upload & serve foto produk |
 
 ---
 
@@ -298,11 +298,13 @@ PENDING → VERIFIED
 ## 11. Konvensi Git & Kolaborasi
 
 ### Judul Issue
+
 - Format: `Feature: Nama Fitur` / `Fix: Nama Bug`
 - Bahasa: Indonesia
 - Contoh: `Feature: Implementasi API Create Product`
 
 ### Judul Pull Request
+
 - Format: Sama dengan judul issue yang diselesaikan
 - Contoh: `Feature: Implementasi API Create Product`
 

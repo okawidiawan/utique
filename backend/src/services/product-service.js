@@ -3,7 +3,7 @@ import { ResponseError } from "../error/response-error.js";
 import {
   searchProductValidation,
   getProductBySlugValidation,
-} from "../validation/product-validation.js";
+} from "../validation/product-public-validation.js";
 
 /**
  * Mencari produk cookies dengan paginasi dan filter nama (Public)
