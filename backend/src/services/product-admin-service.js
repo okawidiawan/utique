@@ -1,13 +1,6 @@
 import { prisma } from "../application/database.js";
 import { ResponseError } from "../error/response-error.js";
-import {
-  createProductValidation,
-  updateProductValidation,
-  getProductValidation,
-  createVariantValidation,
-  updateVariantValidation,
-  getVariantValidation,
-} from "../validation/product-admin-validation.js";
+import { createProductValidation, updateProductValidation, getProductValidation, createVariantValidation, updateVariantValidation, getVariantValidation } from "../validation/product-admin-validation.js";
 
 // ==========================================
 // Product Admin Service — Logika bisnis untuk domain Product & Variant (Admin)
@@ -42,7 +35,7 @@ const create = async (request) => {
     where: { slug },
   });
 
-  if (countProduct === 1) {
+  if (countProduct > 0) {
     throw new ResponseError(400, "Nama produk sudah digunakan (slug duplikat).");
   }
 
@@ -183,7 +176,7 @@ const createVariant = async (productId, request) => {
       sizeId: variantRequest.sizeId,
     },
   });
-  if (countDuplicate === 1) {
+  if (countDuplicate > 0) {
     throw new ResponseError(400, "Varian produk ini sudah terdaftar.");
   }
 
