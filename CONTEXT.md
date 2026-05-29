@@ -212,7 +212,7 @@ PENDING → VERIFIED
 
 ### Tahap 5 — Keranjang (Cart)
 
-22. [ ] `GET /api/cart` — Mengambil isi keranjang
+22. [x] `GET /api/cart` — Mengambil isi keranjang
 23. [ ] `POST /api/cart/items` — Menambahkan item ke keranjang
 24. [ ] `PATCH /api/cart/items/:id` — Mengubah quantity item
 25. [ ] `DELETE /api/cart/items/:id` — Menghapus item dari keranjang

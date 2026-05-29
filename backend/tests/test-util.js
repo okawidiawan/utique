@@ -123,3 +123,26 @@ export const createTestAddress = async (userId, customData = {}) => {
     }
   });
 };
+
+export const removeTestCart = async () => {
+  await prisma.cartItem.deleteMany({});
+  await prisma.cart.deleteMany({});
+};
+
+export const createTestCart = async (userId) => {
+  return prisma.cart.create({
+    data: {
+      userId,
+    },
+  });
+};
+
+export const createTestCartItem = async (cartId, productVariantId, quantity = 1) => {
+  return prisma.cartItem.create({
+    data: {
+      cartId,
+      productVariantId,
+      quantity,
+    },
+  });
+};

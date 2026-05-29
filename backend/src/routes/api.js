@@ -1,6 +1,7 @@
 import express from "express";
 import { authMiddleware } from "../middleware/auth-middleware.js";
 import userController from "../controller/user-controller.js";
+import cartController from "../controller/cart-controller.js";
 
 export const apiRouter = express.Router();
 
@@ -25,7 +26,7 @@ apiRouter.delete("/api/addresses/:id", userController.deleteAddress);
 // ==========================================
 // Cart Routes
 // ==========================================
-// TODO: GET /api/cart — Isi keranjang
+apiRouter.get("/api/cart", cartController.get);
 // TODO: POST /api/cart/items — Tambah item
 // TODO: PATCH /api/cart/items/:id — Ubah quantity
 // TODO: DELETE /api/cart/items/:id — Hapus item
