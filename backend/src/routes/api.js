@@ -27,7 +27,7 @@ apiRouter.delete("/api/addresses/:id", userController.deleteAddress);
 // Cart Routes
 // ==========================================
 apiRouter.get("/api/cart", cartController.get);
-// TODO: POST /api/cart/items — Tambah item
+apiRouter.post("/api/cart/items", cartController.addItem);
 // TODO: PATCH /api/cart/items/:id — Ubah quantity
 // TODO: DELETE /api/cart/items/:id — Hapus item
 
