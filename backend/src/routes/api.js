@@ -28,7 +28,7 @@ apiRouter.delete("/api/addresses/:id", userController.deleteAddress);
 // ==========================================
 apiRouter.get("/api/cart", cartController.get);
 apiRouter.post("/api/cart/items", cartController.addItem);
-// TODO: PATCH /api/cart/items/:id — Ubah quantity
+apiRouter.patch("/api/cart/items/:id", cartController.updateItem);
 // TODO: DELETE /api/cart/items/:id — Hapus item
 
 // ==========================================

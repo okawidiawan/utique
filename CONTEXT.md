@@ -214,7 +214,7 @@ PENDING → VERIFIED
 
 22. [x] `GET /api/cart` — Mengambil isi keranjang
 23. [x] `POST /api/cart/items` — Menambahkan item ke keranjang
-24. [ ] `PATCH /api/cart/items/:id` — Mengubah quantity item
+24. [x] `PATCH /api/cart/items/:id` — Mengubah quantity item
 25. [ ] `DELETE /api/cart/items/:id` — Menghapus item dari keranjang
 
 ### Tahap 6 — Order & Checkout
@@ -321,11 +321,12 @@ PENDING → VERIFIED
 ### Pada saat menjalankan task
 
 - Untuk AI Assistant yang melakukan coding:
-  Selalu buat dokumentasinya di baris program, jelaskan kegunaan function/method dengan bahasa Indonesia yang mudah dimengerti.
-  Jika ada perubahan logic pada setiap function, lakukan juga perubahan dokumentasinya.
-  Selalu buat unit test untuk setiap API atau fitur baru yang ditambahkan atau setelah kode diperbaiki.
-  Selalu jalankan unit test yang sudah dibuat, dan harus lolos test dengan benar.
-  Jangan langsung lakukan commit, push, pull request jika tidak diminta.
+  - Selalu buat dokumentasinya di baris program, jelaskan kegunaan function/method dengan bahasa Indonesia yang mudah dimengerti.
+  - Jika ada perubahan logic pada setiap function, lakukan juga perubahan dokumentasinya.
+  - Selalu buat unit test untuk setiap API atau fitur baru yang ditambahkan atau setelah kode diperbaiki.
+  - Selalu jalankan unit test yang sudah dibuat, dan harus lolos test dengan benar.
+  - Tambahkan dokumentasi cara menggunakan API yang baru di `manual-test-api.md` setelah selesai melakukan implementasi, selalu ikuti format `manual-test-api.md` yang sudah ada.
+  - Jangan langsung lakukan commit, push, pull request jika tidak diminta.
 - Untuk AI Assistant yang ditugaskan untuk membuat issue.md, jika tidak ada perintah untuk implementasi, jangan lakukan implementasi kode.
 - Untuk AI Assistant yang ditugaskan untuk mereview tidak perlu melakukan coding, lakukan review dan buatkan prompt yang sesuai dengan hasil review untuk digunakan oleh AI yang melakukan coding.
 

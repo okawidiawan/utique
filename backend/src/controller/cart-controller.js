@@ -41,7 +41,27 @@ const addItem = async (req, res, next) => {
   }
 };
 
+/**
+ * Handler untuk memperbarui item di keranjang.
+ */
+const updateItem = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const cartItemId = parseInt(req.params.id);
+    const request = req.body;
+
+    const result = await cartService.updateItem(userId, cartItemId, request);
+
+    res.status(200).json({
+      data: result,
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
 export default {
   get,
   addItem,
+  updateItem,
 };
