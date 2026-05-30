@@ -1,6 +1,6 @@
 import { prisma } from "../application/database.js";
 import { ResponseError } from "../error/response-error.js";
-import { addItemCartValidation } from "../validation/cart-validation.js";
+import { addItemCartValidation, updateItemCartValidation } from "../validation/cart-validation.js";
 
 /**
  * Mengambil isi keranjang belanja user beserta detail produk, varian, dan rasa.
@@ -124,7 +124,137 @@ const addItem = async (userId, request) => {
   };
 };
 
+/**
+ * Memperbarui item yang sudah ada di dalam keranjang.
+ * @param {number} userId - ID user yang sedang login
+ * @param {number} cartItemId - ID item keranjang yang ingin diubah
+ * @param {Object} request - Body request berisi variant_id dan/atau quantity
+ * @returns {Promise<Object>} - Data item yang sudah diupdate
+ */
+const updateItem = async (userId, cartItemId, request) => {
+  // 1. Validasi input
+  const updateRequest = updateItemCartValidation.parse(request);
+
+  // 2. Cari item dan pastikan milik user yang login
+  const cartItem = await prisma.cartItem.findUnique({
+    where: {
+      id: cartItemId,
+    },
+    include: {
+      cart: true,
+    },
+  });
+
+  if (!cartItem || cartItem.cart.userId !== userId) {
+    throw new ResponseError(404, "Item tidak ditemukan di dalam keranjang.");
+  }
+
+  const dataToUpdate = {};
+
+  // 3. Jika ganti varian, cek ketersediaannya
+  if (updateRequest.variant_id) {
+    const variant = await prisma.productVariant.findUnique({
+      where: {
+        id: updateRequest.variant_id,
+      },
+      include: {
+        product: true,
+      },
+    });
+
+    if (!variant) {
+      throw new ResponseError(404, "Varian produk tidak ditemukan.");
+    }
+
+    if (!variant.isAvailable || !variant.product.isAvailable) {
+      throw new ResponseError(400, "Produk atau varian sedang tidak tersedia.");
+    }
+
+    // 4. Handle "Merge Logic": Jika ganti ke varian yang sudah ada di keranjang
+    const existingItemWithNewVariant = await prisma.cartItem.findFirst({
+      where: {
+        cartId: cartItem.cartId,
+        productVariantId: updateRequest.variant_id,
+        id: {
+          not: cartItemId, // Bukan item yang sedang kita edit
+        },
+      },
+    });
+
+    if (existingItemWithNewVariant) {
+      // Gabungkan quantity ke item yang sudah ada, lalu hapus item saat ini
+      const newQuantity = existingItemWithNewVariant.quantity + (updateRequest.quantity || cartItem.quantity);
+      
+      const updatedItem = await prisma.cartItem.update({
+        where: {
+          id: existingItemWithNewVariant.id,
+        },
+        data: {
+          quantity: newQuantity,
+        },
+        include: {
+          productVariant: {
+            include: {
+              product: true,
+              flavor: true,
+              size: true,
+            },
+          },
+        },
+      });
+
+      await prisma.cartItem.delete({
+        where: {
+          id: cartItemId,
+        },
+      });
+
+      return {
+        id: updatedItem.id,
+        quantity: updatedItem.quantity,
+        variant: {
+          id: updatedItem.productVariant.id,
+          name: `${updatedItem.productVariant.product.name} - ${updatedItem.productVariant.flavor.name} (${updatedItem.productVariant.size.name})`,
+        },
+      };
+    }
+
+    dataToUpdate.productVariantId = updateRequest.variant_id;
+  }
+
+  if (updateRequest.quantity) {
+    dataToUpdate.quantity = updateRequest.quantity;
+  }
+
+  // 5. Jalankan update jika tidak terjadi merge
+  const result = await prisma.cartItem.update({
+    where: {
+      id: cartItemId,
+    },
+    data: dataToUpdate,
+    include: {
+      productVariant: {
+        include: {
+          product: true,
+          flavor: true,
+          size: true,
+        },
+      },
+    },
+  });
+
+  return {
+    id: result.id,
+    quantity: result.quantity,
+    variant: {
+      id: result.productVariant.id,
+      name: `${result.productVariant.product.name} - ${result.productVariant.flavor.name} (${result.productVariant.size.name})`,
+    },
+  };
+};
+
 export default {
   get,
   addItem,
+  updateItem,
 };
