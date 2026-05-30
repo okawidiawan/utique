@@ -23,6 +23,25 @@ const get = async (req, res, next) => {
   }
 };
 
+/**
+ * Handler untuk menambahkan item ke keranjang.
+ */
+const addItem = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const request = req.body;
+    
+    const result = await cartService.addItem(userId, request);
+
+    res.status(200).json({
+      data: result,
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
 export default {
   get,
+  addItem,
 };
