@@ -215,7 +215,7 @@ PENDING → VERIFIED
 22. [x] `GET /api/cart` — Mengambil isi keranjang
 23. [x] `POST /api/cart/items` — Menambahkan item ke keranjang
 24. [x] `PATCH /api/cart/items/:id` — Mengubah quantity item
-25. [ ] `DELETE /api/cart/items/:id` — Menghapus item dari keranjang
+25. [x] `DELETE /api/cart/items/:id` — Menghapus item dari keranjang
 
 ### Tahap 6 — Order & Checkout
 

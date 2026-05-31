@@ -29,7 +29,7 @@ apiRouter.delete("/api/addresses/:id", userController.deleteAddress);
 apiRouter.get("/api/cart", cartController.get);
 apiRouter.post("/api/cart/items", cartController.addItem);
 apiRouter.patch("/api/cart/items/:id", cartController.updateItem);
-// TODO: DELETE /api/cart/items/:id — Hapus item
+apiRouter.delete("/api/cart/items/:id", cartController.removeItem);
 
 // ==========================================
 // Order Routes

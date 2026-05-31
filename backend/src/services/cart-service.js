@@ -253,8 +253,42 @@ const updateItem = async (userId, cartItemId, request) => {
   };
 };
 
+/**
+ * Menghapus item dari keranjang belanja.
+ * @param {number} userId - ID user yang sedang login
+ * @param {number} cartItemId - ID item keranjang yang ingin dihapus
+ * @returns {Promise<Object>} - Pesan sukses
+ */
+const removeItem = async (userId, cartItemId) => {
+  // 1. Cari item dan pastikan milik user yang login
+  const cartItem = await prisma.cartItem.findUnique({
+    where: {
+      id: cartItemId,
+    },
+    include: {
+      cart: true,
+    },
+  });
+
+  if (!cartItem || cartItem.cart.userId !== userId) {
+    throw new ResponseError(404, "Item tidak ditemukan di dalam keranjang.");
+  }
+
+  // 2. Hapus item
+  await prisma.cartItem.delete({
+    where: {
+      id: cartItemId,
+    },
+  });
+
+  return {
+    message: "Item berhasil dihapus dari keranjang",
+  };
+};
+
 export default {
   get,
   addItem,
   updateItem,
+  removeItem,
 };

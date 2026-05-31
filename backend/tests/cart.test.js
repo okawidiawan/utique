@@ -369,4 +369,68 @@ describe("Cart API", () => {
       expect(result.status).toBe(400);
     });
   });
+
+  describe("DELETE /api/cart/items/:id", () => {
+    it("should be able to remove item from cart", async () => {
+      await createTestUser();
+      const user = await getTestUser();
+      const flavor = await createTestFlavor();
+      const size = await createTestSize();
+      const product = await createTestProduct();
+      const variant = await createTestVariant(product.id, flavor.id, size.id);
+      const cart = await createTestCart(user.id);
+      const cartItem = await createTestCartItem(cart.id, variant.id, 2);
+
+      const result = await request(web)
+        .delete(`/api/cart/items/${cartItem.id}`)
+        .set("Authorization", `Bearer ${user.token}`);
+
+      expect(result.status).toBe(200);
+      expect(result.body.data.message).toBe("Item berhasil dihapus dari keranjang");
+
+      const checkItem = await prisma.cartItem.findUnique({
+        where: { id: cartItem.id },
+      });
+      expect(checkItem).toBeNull();
+    });
+
+    it("should reject if cart item does not belong to user", async () => {
+      await createTestUser(); // user 1
+      const user1 = await getTestUser();
+
+      await prisma.user.create({
+        data: {
+          name: "User 2",
+          email: "user2@example.com",
+          password: "password",
+          token: "token2",
+        },
+      });
+      const user2 = await prisma.user.findUnique({
+        where: { email: "user2@example.com" },
+      });
+
+      const flavor = await createTestFlavor();
+      const size = await createTestSize();
+      const product = await createTestProduct();
+      const variant = await createTestVariant(product.id, flavor.id, size.id);
+
+      const cart2 = await createTestCart(user2.id);
+      const cartItem2 = await createTestCartItem(cart2.id, variant.id, 2);
+
+      // User 1 tries to delete User 2's cart item
+      const result = await request(web)
+        .delete(`/api/cart/items/${cartItem2.id}`)
+        .set("Authorization", `Bearer ${user1.token}`);
+
+      expect(result.status).toBe(404);
+      expect(result.body.error).toBe("Item tidak ditemukan di dalam keranjang.");
+    });
+
+    it("should reject request if unauthorized", async () => {
+      const result = await request(web).delete("/api/cart/items/1");
+
+      expect(result.status).toBe(401);
+    });
+  });
 });
