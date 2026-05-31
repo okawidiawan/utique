@@ -60,8 +60,27 @@ const updateItem = async (req, res, next) => {
   }
 };
 
+/**
+ * Handler untuk menghapus item dari keranjang.
+ */
+const removeItem = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const cartItemId = parseInt(req.params.id);
+
+    const result = await cartService.removeItem(userId, cartItemId);
+
+    res.status(200).json({
+      data: result,
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
 export default {
   get,
   addItem,
   updateItem,
+  removeItem,
 };
