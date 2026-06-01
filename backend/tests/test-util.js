@@ -146,3 +146,10 @@ export const createTestCartItem = async (cartId, productVariantId, quantity = 1)
     },
   });
 };
+
+export const removeTestOrders = async () => {
+  await prisma.productionQueue.deleteMany({});
+  await prisma.payment.deleteMany({});
+  await prisma.orderItem.deleteMany({});
+  await prisma.order.deleteMany({});
+};
