@@ -36,6 +36,9 @@ Dokumentasi ini berisi daftar endpoint API Utique yang disusun berdasarkan tahap
 | **5** | **POST** | `/api/cart/items` | Tambah item ke keranjang | User |
 | **5** | **PATCH** | `/api/cart/items/:id` | Update item keranjang | User |
 | **5** | **DELETE** | `/api/cart/items/:id` | Hapus item keranjang | User |
+| **6** | **POST** | `/api/orders` | Checkout (Buat Order) | User |
+| **6** | **GET** | `/api/orders` | List pesanan saya | User |
+| **6** | **GET** | `/api/orders/:id` | Detail pesanan | User |
 
 ---
 
@@ -164,6 +167,27 @@ Dokumentasi ini berisi daftar endpoint API Utique yang disusun berdasarkan tahap
     }
   }
   ```
+
+---
+
+## Tahap 6: Order & Checkout
+
+### Create Order (Checkout)
+- **URL:** `POST http://localhost:5000/api/orders`
+- **Body:**
+  ```json
+  {
+    "address_id": 1,
+    "shipping_courier": "JNE"
+  }
+  ```
+- **Keterangan:** Mengambil item dari keranjang user, membuat record order, snaphot item, dan mengosongkan keranjang.
+
+### List Orders
+- **URL:** `GET http://localhost:5000/api/orders`
+
+### Order Detail
+- **URL:** `GET http://localhost:5000/api/orders/:id`
 
 ---
 

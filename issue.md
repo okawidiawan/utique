@@ -1,119 +1,323 @@
-# Issue: Implementasi API Update Item Keranjang (PATCH)
+# Issue: Feature — Implementasi API Checkout (POST /api/orders)
 
 ## 1. Background & Tujuan
 
-Fitur ini bertujuan untuk memungkinkan pengguna (Customer) memperbarui item yang sudah ada di dalam keranjang belanja mereka tanpa harus menghapus dan menambah ulang. Pengguna dapat mengubah jumlah (quantity) barang atau mengganti varian (rasa/ukuran) dari item tersebut.
+Fitur ini mengimplementasikan endpoint checkout — proses mengubah isi keranjang belanja (Cart) menjadi sebuah Order resmi. Ini adalah inti dari alur transaksi di Utique.
 
-Tujuan utama:
+Ketika customer menekan tombol "Checkout", sistem harus:
 
-- Memberikan fleksibilitas kepada user untuk menyesuaikan pesanan di halaman keranjang.
-- Memastikan integritas data (hanya bisa mengubah milik sendiri).
-- Menangani konflik jika user mengubah varian ke varian yang sudah ada di keranjangnya.
+- Mengambil semua item dari keranjang milik customer
+- Memvalidasi ketersediaan setiap varian produk
+- Menghitung total harga dari database (bukan dari client, untuk mencegah manipulasi)
+- Mengecek kapasitas produksi harian (maks 10 order/hari)
+- Menghitung estimasi tanggal selesai berdasarkan antrian produksi
+- Membuat record Order, OrderItem (snapshot), dan ProductionQueue secara atomic
+- Mengosongkan keranjang setelah order berhasil dibuat
+
+Semua operasi database harus dijalankan dalam satu transaksi (`prisma.$transaction()`) agar jika salah satu langkah gagal, seluruh proses di-rollback.
+
+---
 
 ## 2. Spesifikasi Teknis
 
-- **Endpoint**: `PATCH /api/cart/items/:id`
-- **Path Parameter**: `id` (ID dari CartItem yang ingin diubah).
-- **Autentikasi**: Perlu (User Token via `apiRouter`).
-- **Request Body (JSON)**:
-  ```json
-  {
-    "variant_id": 1, // Opsional
-    "quantity": 2 // Opsional
-  }
-  ```
-- **Response Sukses (200 OK)**:
-  ```json
-  {
-    "data": {
-      "id": 1,
-      "quantity": 2,
-      "productVariant": {
-        "id": 1,
-        "price": 85000,
-        "product": { "name": "Dark Chocolate Cookies" },
-        "flavor": { "name": "Classic" },
-        "size": { "name": "Medium Jar" }
+### Endpoint
+
+```
+POST /api/orders
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+Endpoint ini masuk ke **`api.js`** (apiRouter) — wajib login, tidak perlu role admin.
+
+### Request Body
+
+```json
+{
+  "addressId": 1
+}
+```
+
+| Field       | Tipe    | Wajib | Keterangan                                        |
+| ----------- | ------- | ----- | ------------------------------------------------- |
+| `addressId` | Integer | ✅    | ID alamat pengiriman milik user yang sedang login |
+
+> **Catatan**: Item tidak dikirim dari client. Sistem mengambil langsung dari Cart milik user.
+
+### Response — Sukses `201 Created`
+
+```json
+{
+  "data": {
+    "id": "uuid",
+    "status": "PENDING_PAYMENT",
+    "payment_deadline": "2026-06-03T10:00:00.000Z",
+    "estimated_done_date": "2026-06-05",
+    "total_price": 150000,
+    "address": {
+      "recipient_name": "Budi Santoso",
+      "phone": "08123456789",
+      "full_address": "Jl. Merdeka No. 1",
+      "city": "Palembang",
+      "province": "Sumatera Selatan",
+      "postal_code": "30111"
+    },
+    "items": [
+      {
+        "id": "uuid",
+        "product_name": "Choco Chip Cookie",
+        "flavor_name": "Chocolate",
+        "size_name": "Medium/20pcs",
+        "quantity": 2,
+        "unit_price": 50000,
+        "subtotal": 100000
       }
-    }
+    ]
   }
-  ```
-- **Response Error**:
-  - `400 Bad Request`: Jika validasi gagal (misal quantity < 1).
-  - `404 Not Found`: Jika item tidak ditemukan atau bukan milik user yang login.
-  - `404 Not Found`: Jika `variant_id` baru tidak ditemukan di database.
+}
+```
+
+### Response — Error
+
+| Kondisi                                                 | HTTP Status | Pesan Error                                                   |
+| ------------------------------------------------------- | ----------- | ------------------------------------------------------------- |
+| Token tidak valid / tidak ada                           | `401`       | `"Unauthorized"`                                              |
+| `addressId` tidak dikirim / bukan integer               | `400`       | `"addressId harus berupa angka"`                              |
+| Alamat tidak ditemukan / bukan milik user               | `404`       | `"Alamat tidak ditemukan"`                                    |
+| Keranjang kosong                                        | `400`       | `"Keranjang belanja masih kosong"`                            |
+| Salah satu varian tidak tersedia (`isAvailable: false`) | `400`       | `"Produk [nama] varian [flavor/size] sudah tidak tersedia"`   |
+| Kapasitas produksi penuh untuk semua hari yang dicek    | `400`       | `"Kapasitas produksi penuh, silakan coba beberapa saat lagi"` |
+
+---
 
 ## 3. Step-by-Step Implementasi
 
-### Bagian A: Validasi
+### Step 1 — Buat Validation Schema (`src/validation/order-validation.js`)
 
-1. **File: `backend/src/validation/cart-validation.js`**
-   - Buat skema baru bernama `updateItemCartValidation`.
-   - Gunakan `z.object`.
-   - Tambahkan `variant_id`: `z.number().positive().optional()`.
-   - Tambahkan `quantity`: `z.number().min(1).optional()`.
-   - Pastikan field bersifat **optional** agar user bisa mengirim salah satu saja.
+Buat file baru `src/validation/order-validation.js`.
 
-### Bagian B: Service Logic
+Buat dan export satu schema Zod bernama `createOrderValidation`:
 
-2. **File: `backend/src/services/cart-service.js`**
-   - Buat fungsi `updateItem(userId, cartItemId, request)`.
-   - **Langkah 1 (Validasi Input)**: Validasi `request` menggunakan `updateItemCartValidation.parse(request)`.
-   - **Langkah 2 (Cek Eksistensi)**: Cari `CartItem` di database berdasarkan `id: cartItemId`.
-     - _PENTING_: Lakukan `include` ke tabel `cart` untuk mengecek apakah `cart.userId` sama dengan `userId` dari parameter.
-     - Jika tidak cocok atau tidak ada, lempar `ResponseError(404, "Item tidak ditemukan di dalam keranjang.")`.
-   - **Langkah 3 (Validasi Varian Baru)**: Jika `variant_id` dikirim dalam request:
-     - Cek apakah varian tersebut ada di database dan `isAvailable` adalah true.
-     - Jika tidak tersedia, lempar error 400 atau 404 yang sesuai.
-   - **Langkah 4 (Handle Duplikasi)**: Jika user mengubah `variant_id` ke varian yang SUDAH ADA di item lain di keranjang yang sama:
-     - Cari apakah ada `CartItem` lain dengan `cartId` yang sama dan `productVariantId` tersebut.
-     - Jika ada, tambahkan quantity item lama tersebut dengan quantity dari item yang sedang diupdate, lalu hapus item yang sedang diupdate ini.
-     - Jika tidak ada duplikasi, lanjut ke update biasa.
-   - **Langkah 5 (Database Update)**: Jalankan `prisma.cartItem.update`.
-     - Update field `quantity` dan/atau `productVariantId` sesuai data yang dikirim.
-     - Gunakan `include` yang lengkap (product, flavor, size) agar response sesuai spesifikasi.
-   - **Langkah 6 (Return)**: Kembalikan data item yang sudah di-mapping sesuai format response.
+```js
+export const createOrderValidation = z.object({
+  addressId: z
+    .number({
+      required_error: "addressId wajib diisi",
+      invalid_type_error: "addressId harus berupa angka",
+    })
+    .int("addressId harus berupa bilangan bulat")
+    .positive("addressId tidak valid"),
+});
+```
 
-### Bagian C: Controller
+---
 
-3. **File: `backend/src/controller/cart-controller.js`**
-   - Buat fungsi `updateItem(req, res, next)`.
-   - Ambil `userId` dari `req.user.id`.
-   - Ambil `cartItemId` dari `req.params.id` (jangan lupa diubah ke integer).
-   - Ambil data dari `req.body`.
-   - Panggil `cartService.updateItem`.
-   - Kirim response `res.status(200).json({ data: result })`.
-   - Gunakan `try-catch` dan teruskan error ke `next(e)`.
+### Step 2 — Buat Service (`src/services/order-service.js`)
 
-### Bagian D: Routing
+Buat file baru `src/services/order-service.js`.
 
-4. **File: `backend/src/routes/api.js`**
-   - Daftarkan route baru di dalam `apiRouter`.
-   - `apiRouter.patch("/api/cart/items/:id", cartController.updateItem);`.
+Buat dan export satu fungsi async bernama `createOrder(user, request)`.
 
-### Bagian E: Dokumentasi & Testing
+Di dalam fungsi ini, lakukan langkah-langkah berikut **secara berurutan**:
 
-5. **File: `manual-test-api.md`**
-   - Tambahkan dokumentasi untuk endpoint `PATCH /api/cart/items/:id`.
-   - Berikan contoh request body dan response sukses.
-6. **File: `backend/tests/cart.test.js`**
-   - Tambahkan unit test untuk skenario:
-     - Sukses update quantity.
-     - Sukses update variant.
-     - Error jika ID item tidak valid/milik orang lain.
-     - Sukses "merge" item jika ganti varian ke yang sudah ada di keranjang.
+**2a. Validasi input**
+
+- Validasi `request` menggunakan `createOrderValidation` dari Zod.
+- Jika gagal, lempar `ResponseError(400, pesan)`.
+
+**2b. Validasi alamat**
+
+- Query `Address` dengan kondisi `id = addressId AND userId = user.id`.
+- Jika tidak ditemukan, lempar `ResponseError(404, "Alamat tidak ditemukan")`.
+
+**2c. Ambil isi keranjang**
+
+- Query `Cart` milik user, include `CartItem` beserta relasi `ProductVariant` → `Product`, `Flavor`, `Size`.
+- Gunakan kondisi: `cart.userId = user.id`.
+- Jika `cart` tidak ada atau `cart.items` kosong, lempar `ResponseError(400, "Keranjang belanja masih kosong")`.
+
+**2d. Validasi ketersediaan varian**
+
+- Loop setiap `CartItem`, cek `cartItem.variant.isAvailable === true`.
+- Jika ada yang `false`, lempar `ResponseError(400, "Produk [product.name] varian [flavor.name]/[size.name] sudah tidak tersedia")`.
+
+**2e. Hitung total harga**
+
+- Loop setiap `CartItem`, hitung `subtotal = cartItem.quantity * cartItem.variant.price`.
+- Jumlahkan semua subtotal menjadi `totalPrice`.
+
+**2f. Hitung estimasi & kapasitas produksi**
+
+- Tentukan `startDate` = hari ini (tanggal server, bukan client).
+- Query `ProductionQueue` untuk menghitung jumlah order per hari mulai dari `startDate`.
+- Cari hari pertama yang jumlah ordernya < 10 (kapasitas maks).
+- Hari itu menjadi `productionDate` (tanggal mulai produksi).
+- `estimated_done_date` = `productionDate` + `product.production_time_days` (ambil dari produk dengan `production_time_days` terbesar di cart, atau rata-rata — tentukan sendiri dan dokumentasikan pilihan ini di kode).
+- Jika tidak ada hari yang tersedia dalam 30 hari ke depan, lempar `ResponseError(400, "Kapasitas produksi penuh, silakan coba beberapa saat lagi")`.
+
+**2g. Jalankan transaksi Prisma**
+
+Gunakan `prisma.$transaction(async (tx) => { ... })` untuk operasi berikut:
+
+1. Buat record `Order`:
+
+   ```
+   status: "PENDING_PAYMENT"
+   userId: user.id
+   addressId: address.id
+   totalPrice: totalPrice
+   paymentDeadline: sekarang + 24 jam
+   estimatedDoneDate: estimated_done_date
+   ```
+
+2. Buat semua `OrderItem` (snapshot) — loop dari CartItem:
+
+   ```
+   orderId: order.id
+   productVariantId: cartItem.variantId
+   productName: cartItem.variant.product.name   ← snapshot
+   flavorName: cartItem.variant.flavor.name     ← snapshot
+   sizeName: cartItem.variant.size.name         ← snapshot
+   quantity: cartItem.quantity
+   unitPrice: cartItem.variant.price            ← snapshot
+   subtotal: cartItem.quantity * cartItem.variant.price
+   ```
+
+3. Buat record `ProductionQueue`:
+
+   ```
+   orderId: order.id
+   scheduledDate: productionDate
+   ```
+
+4. Hapus semua `CartItem` milik cart user (kosongkan keranjang):
+   ```
+   deleteMany where cartId = cart.id
+   ```
+
+**2h. Return response**
+
+- Setelah transaksi berhasil, query ulang `Order` by id dengan include `OrderItem` dan `Address`.
+- Format dan return data sesuai spesifikasi response di bagian 2.
+
+---
+
+### Step 3 — Buat Controller (`src/controller/order-controller.js`)
+
+Buat file baru `src/controller/order-controller.js`.
+
+Buat dan export satu fungsi async bernama `create(req, res, next)`:
+
+```js
+export const create = async (req, res, next) => {
+  try {
+    const result = await createOrder(req.user, req.body);
+    res.status(201).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+};
+```
+
+`req.user` sudah diset oleh `auth-middleware.js` (sudah ada).
+
+---
+
+### Step 4 — Daftarkan Route (`src/routes/api.js`)
+
+Buka file `src/routes/api.js` yang sudah ada.
+
+Import controller:
+
+```js
+import * as orderController from "../controller/order-controller.js";
+```
+
+Tambahkan route baru:
+
+```js
+apiRouter.post("/orders", orderController.create);
+```
+
+Pastikan route ini berada **di bawah** middleware auth (sudah terpasang di level router).
+
+---
+
+### Step 5 — Buat Unit Test (`tests/order.test.js`)
+
+Buat file baru `tests/order.test.js`.
+
+Gunakan pendekatan **integration test** dengan `supertest` dan database test nyata (sama seperti test file lain yang sudah ada — lihat `test-util.js` untuk helper).
+
+**Setup & Teardown**
+
+- `beforeEach`: Buat user test, buat address test, buat produk + variant test, buat cart + cart item test. Gunakan helper dari `test-util.js` atau buat fungsi helper lokal.
+- `afterEach`: Hapus semua data test (order, cart, product, address, user) agar test tidak saling interferensi.
+
+**Test Cases yang wajib dibuat:**
+
+```
+✅ Berhasil membuat order dari keranjang yang valid
+   - Kirim request dengan addressId yang valid
+   - Cek response status 201
+   - Cek response body memiliki: id, status, payment_deadline, estimated_done_date, total_price, address, items
+   - Cek status order = "PENDING_PAYMENT"
+   - Cek cart kosong setelah checkout (query CartItem = 0)
+   - Cek ProductionQueue dibuat
+
+✅ Gagal jika tidak ada token (401)
+
+✅ Gagal jika addressId tidak dikirim (400)
+
+✅ Gagal jika addressId bukan integer (400)
+
+✅ Gagal jika addressId milik user lain (404)
+
+✅ Gagal jika keranjang kosong (400)
+
+✅ Gagal jika salah satu varian tidak tersedia / isAvailable: false (400)
+```
+
+---
 
 ## 4. Acceptance Criteria
 
-- [ ] User berhasil mengubah quantity item di keranjang.
-- [ ] User berhasil mengubah varian (rasa/ukuran) item di keranjang.
-- [ ] Jika hanya mengirim quantity, `variant_id` tetap menggunakan data lama.
-- [ ] Jika hanya mengirim `variant_id`, `quantity` tetap menggunakan data lama.
-- [ ] User lain tidak bisa mengubah isi keranjang user yang sedang login (keamanan data).
-- [ ] Response mengembalikan data item yang sudah diperbarui dengan detail produk lengkap.
-- [ ] Muncul pesan error yang tepat jika item tidak ditemukan.
-- [ ] Unit test lolos semua.
+### Fungsionalitas
 
-## 5. Catatan Implementasi (High Level)
+- [ ] `POST /api/orders` berhasil membuat order dari cart yang valid dan mengembalikan status `201`
+- [ ] Response body sesuai format spesifikasi (ada `id`, `status`, `payment_deadline`, `estimated_done_date`, `total_price`, `address`, `items`)
+- [ ] `status` order yang baru dibuat selalu `PENDING_PAYMENT`
+- [ ] `payment_deadline` diset +24 jam dari waktu checkout
+- [ ] `total_price` dihitung dari database (ProductVariant.price × quantity), bukan dari client
+- [ ] Data `OrderItem` berisi snapshot (`product_name`, `flavor_name`, `size_name`, `unit_price`) — bukan foreign key ke master data
+- [ ] Cart dikosongkan (CartItem dihapus) setelah order berhasil dibuat
+- [ ] Record `ProductionQueue` dibuat untuk order baru
 
-Pastikan setiap query database yang melibatkan pencarian item keranjang selalu memverifikasi kepemilikan user (via `userId`). Jangan biarkan ada celah di mana user bisa menebak ID `CartItem` milik orang lain dan mengubah isinya.
+### Validasi & Error Handling
+
+- [ ] Request tanpa token → `401`
+- [ ] `addressId` tidak dikirim → `400` dengan pesan Bahasa Indonesia
+- [ ] `addressId` bukan milik user yang login → `404`
+- [ ] Cart kosong → `400` dengan pesan Bahasa Indonesia
+- [ ] Varian tidak tersedia → `400` dengan pesan menyebut nama produk & varian
+- [ ] Kapasitas produksi penuh → `400` dengan pesan Bahasa Indonesia
+
+### Keamanan & Konsistensi
+
+- [ ] Harga tidak bisa dimanipulasi dari client (diambil dari DB)
+- [ ] Semua operasi DB dalam satu `prisma.$transaction()` — jika satu gagal, semua rollback
+- [ ] Query alamat selalu menyertakan `userId = user.id` (data isolation)
+- [ ] Query cart selalu menyertakan `userId = user.id` (data isolation)
+
+### Testing
+
+- [ ] Semua test case di Step 5 sudah dibuat
+- [ ] Semua test **lolos** (`bun test` atau `npm test` tidak ada yang fail)
+- [ ] Tidak ada data test yang tersisa setelah test selesai (cleanup di `afterEach`)
+
+### Kode
+
+- [ ] Setiap function memiliki komentar dokumentasi dalam Bahasa Indonesia
+- [ ] Error diteruskan ke `next(e)` di controller (tidak di-handle langsung)
+- [ ] Tidak ada logic database di controller (hanya di service)
+- [ ] File mengikuti konvensi nama: `kebab-case.js`

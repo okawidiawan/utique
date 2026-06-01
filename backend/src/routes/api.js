@@ -2,6 +2,7 @@ import express from "express";
 import { authMiddleware } from "../middleware/auth-middleware.js";
 import userController from "../controller/user-controller.js";
 import cartController from "../controller/cart-controller.js";
+import orderController from "../controller/order-controller.js";
 
 export const apiRouter = express.Router();
 
@@ -34,9 +35,9 @@ apiRouter.delete("/api/cart/items/:id", cartController.removeItem);
 // ==========================================
 // Order Routes
 // ==========================================
-// TODO: POST /api/orders — Checkout
-// TODO: GET /api/orders — List pesanan
-// TODO: GET /api/orders/:id — Detail pesanan
+apiRouter.post("/api/orders", orderController.create);
+apiRouter.get("/api/orders", orderController.list);
+apiRouter.get("/api/orders/:id", orderController.get);
 
 // ==========================================
 // Payment Routes

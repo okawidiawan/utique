@@ -17,5 +17,3 @@ frontend/package-lock.json
 .DS_Store
 Thumbs.db
 
-# Manual Test API
-manual-test-api.md

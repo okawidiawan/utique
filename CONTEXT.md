@@ -219,9 +219,9 @@ PENDING → VERIFIED
 
 ### Tahap 6 — Order & Checkout
 
-26. [ ] `POST /api/orders` — Membuat order dari keranjang (checkout)
-27. [ ] `GET /api/orders` — Mengambil list pesanan user
-28. [ ] `GET /api/orders/:id` — Mengambil detail pesanan (status, estimasi, resi)
+26. [x] `POST /api/orders` — Membuat order dari keranjang (checkout)
+27. [x] `GET /api/orders` — Mengambil list pesanan user
+28. [x] `GET /api/orders/:id` — Mengambil detail pesanan (status, estimasi, resi)
 
 ### Tahap 7 — Pembayaran
 
