@@ -225,9 +225,9 @@ PENDING → VERIFIED
 
 ### Tahap 7 — Pembayaran
 
-29. [ ] `POST /api/orders/:orderId/payment` — Upload bukti pembayaran
-30. [ ] `PATCH /api/admin/payments/:id/verify` — Admin: verifikasi pembayaran
-31. [ ] `PATCH /api/admin/payments/:id/reject` — Admin: tolak pembayaran
+29. [x] `POST /api/orders/:orderId/payment` — Upload bukti pembayaran
+30. [x] `PATCH /api/admin/payments/:id/verify` — Admin: verifikasi pembayaran
+31. [x] `PATCH /api/admin/payments/:id/reject` — Admin: tolak pembayaran
 
 ### Tahap 8 — Manajemen Order Admin
 

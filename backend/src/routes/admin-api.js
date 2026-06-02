@@ -4,6 +4,7 @@ import { adminMiddleware } from "../middleware/admin-middleware.js";
 
 import masterAdminController from "../controller/master-admin-controller.js";
 import productAdminController from "../controller/product-admin-controller.js";
+import paymentAdminController from "../controller/payment-admin-controller.js";
 
 export const adminRouter = express.Router();
 
@@ -45,8 +46,8 @@ adminRouter.delete("/api/admin/variants/:id", productAdminController.removeVaria
 // ==========================================
 // Payment Verification Routes
 // ==========================================
-// TODO: PATCH /api/admin/payments/:id/verify — Verifikasi pembayaran
-// TODO: PATCH /api/admin/payments/:id/reject — Tolak pembayaran
+adminRouter.patch("/api/admin/payments/:id/verify", paymentAdminController.verify);
+adminRouter.patch("/api/admin/payments/:id/reject", paymentAdminController.reject);
 
 // ==========================================
 // Dashboard & Statistics Routes (Fase 2)
