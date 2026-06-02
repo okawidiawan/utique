@@ -1,217 +1,323 @@
-# Issue: Feature — Implementasi API Checkout (POST /api/orders)
+# Issue: Feature — Implementasi API Pembayaran (Tahap 7)
 
 ## 1. Background & Tujuan
 
-Fitur ini mengimplementasikan endpoint checkout — proses mengubah isi keranjang belanja (Cart) menjadi sebuah Order resmi. Ini adalah inti dari alur transaksi di Utique.
+Utique menggunakan sistem pembayaran **manual via transfer bank**. Tidak ada payment gateway otomatis. Alurnya adalah:
 
-Ketika customer menekan tombol "Checkout", sistem harus:
+1. Customer membuat order → status order `PENDING_PAYMENT`
+2. Customer transfer ke rekening toko
+3. Customer upload foto/screenshot bukti transfer melalui aplikasi
+4. Admin melihat bukti transfer, lalu memverifikasi atau menolak
+5. Jika **diverifikasi** → status order berubah menjadi `PAID`
+6. Jika **ditolak** (misal: kurang bayar, bukti tidak jelas, salah rekening) → status payment `REJECTED`, customer bisa upload ulang bukti baru
 
-- Mengambil semua item dari keranjang milik customer
-- Memvalidasi ketersediaan setiap varian produk
-- Menghitung total harga dari database (bukan dari client, untuk mencegah manipulasi)
-- Mengecek kapasitas produksi harian (maks 10 order/hari)
-- Menghitung estimasi tanggal selesai berdasarkan antrian produksi
-- Membuat record Order, OrderItem (snapshot), dan ProductionQueue secara atomic
-- Mengosongkan keranjang setelah order berhasil dibuat
-
-Semua operasi database harus dijalankan dalam satu transaksi (`prisma.$transaction()`) agar jika salah satu langkah gagal, seluruh proses di-rollback.
+Fitur ini mencakup 3 endpoint:
+- `POST /api/orders/:orderId/payment` — Customer upload bukti pembayaran
+- `PATCH /api/admin/payments/:id/verify` — Admin verifikasi pembayaran
+- `PATCH /api/admin/payments/:id/reject` — Admin tolak pembayaran
 
 ---
 
 ## 2. Spesifikasi Teknis
 
-### Endpoint
+### Status Flow yang Terlibat
 
 ```
-POST /api/orders
-Authorization: Bearer <token>
-Content-Type: application/json
+Order:    PENDING_PAYMENT ──(verify)──► PAID
+                          ◄─(reject)── (tetap PENDING_PAYMENT, bisa upload ulang)
+
+Payment:  PENDING ──► VERIFIED
+                 └──► REJECTED
 ```
 
-Endpoint ini masuk ke **`api.js`** (apiRouter) — wajib login, tidak perlu role admin.
+---
 
-### Request Body
+### Endpoint 1 — Upload Bukti Pembayaran
 
-```json
-{
-  "addressId": 1
-}
+```
+POST /api/orders/:orderId/payment
+Authorization: Bearer <token-customer>
+Content-Type: multipart/form-data
 ```
 
-| Field       | Tipe    | Wajib | Keterangan                                        |
-| ----------- | ------- | ----- | ------------------------------------------------- |
-| `addressId` | Integer | ✅    | ID alamat pengiriman milik user yang sedang login |
+**Request — multipart/form-data**
 
-> **Catatan**: Item tidak dikirim dari client. Sistem mengambil langsung dari Cart milik user.
+| Field | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `proof_image` | File (jpg/png/webp) | ✅ | Foto bukti transfer, maks 2MB |
 
-### Response — Sukses `201 Created`
-
+**Response — Sukses `201 Created`**
 ```json
 {
   "data": {
     "id": "uuid",
-    "status": "PENDING_PAYMENT",
-    "payment_deadline": "2026-06-03T10:00:00.000Z",
-    "estimated_done_date": "2026-06-05",
-    "total_price": 150000,
-    "address": {
-      "recipient_name": "Budi Santoso",
-      "phone": "08123456789",
-      "full_address": "Jl. Merdeka No. 1",
-      "city": "Palembang",
-      "province": "Sumatera Selatan",
-      "postal_code": "30111"
-    },
-    "items": [
-      {
-        "id": "uuid",
-        "product_name": "Choco Chip Cookie",
-        "flavor_name": "Chocolate",
-        "size_name": "Medium/20pcs",
-        "quantity": 2,
-        "unit_price": 50000,
-        "subtotal": 100000
-      }
-    ]
+    "orderId": "uuid",
+    "proofImageUrl": "https://res.cloudinary.com/...",
+    "status": "PENDING",
+    "createdAt": "2026-06-03T10:00:00.000Z"
   }
 }
 ```
 
-### Response — Error
+**Response — Error**
 
-| Kondisi                                                 | HTTP Status | Pesan Error                                                   |
-| ------------------------------------------------------- | ----------- | ------------------------------------------------------------- |
-| Token tidak valid / tidak ada                           | `401`       | `"Unauthorized"`                                              |
-| `addressId` tidak dikirim / bukan integer               | `400`       | `"addressId harus berupa angka"`                              |
-| Alamat tidak ditemukan / bukan milik user               | `404`       | `"Alamat tidak ditemukan"`                                    |
-| Keranjang kosong                                        | `400`       | `"Keranjang belanja masih kosong"`                            |
-| Salah satu varian tidak tersedia (`isAvailable: false`) | `400`       | `"Produk [nama] varian [flavor/size] sudah tidak tersedia"`   |
-| Kapasitas produksi penuh untuk semua hari yang dicek    | `400`       | `"Kapasitas produksi penuh, silakan coba beberapa saat lagi"` |
+| Kondisi | HTTP | Pesan |
+|---|---|---|
+| Token tidak valid | `401` | `"Unauthorized"` |
+| Order tidak ditemukan / bukan milik user | `404` | `"Pesanan tidak ditemukan."` |
+| Order bukan status `PENDING_PAYMENT` | `400` | `"Pesanan ini tidak menunggu pembayaran."` |
+| Order sudah melewati `payment_deadline` | `400` | `"Batas waktu pembayaran sudah habis."` |
+| Sudah ada payment `PENDING` atau `VERIFIED` | `400` | `"Bukti pembayaran sudah pernah diupload."` |
+| File tidak dikirim | `400` | `"Bukti pembayaran wajib diupload."` |
+| File bukan gambar | `400` | `"File harus berupa gambar (jpg, png, webp)."` |
+| File terlalu besar (> 2MB) | `400` | `"Ukuran file maksimal 2MB."` |
 
 ---
 
-## 3. Step-by-Step Implementasi
+### Endpoint 2 — Admin Verifikasi Pembayaran
 
-### Step 1 — Buat Validation Schema (`src/validation/order-validation.js`)
+```
+PATCH /api/admin/payments/:id/verify
+Authorization: Bearer <token-admin>
+Content-Type: application/json
+```
 
-Buat file baru `src/validation/order-validation.js`.
+**Request Body**
+```json
+{
+  "notes": "Pembayaran sudah masuk Rp 150.000"
+}
+```
 
-Buat dan export satu schema Zod bernama `createOrderValidation`:
+| Field | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `notes` | String | ❌ | Catatan admin, opsional, maks 255 karakter |
 
-```js
-export const createOrderValidation = z.object({
-  addressId: z
-    .number({
-      required_error: "addressId wajib diisi",
-      invalid_type_error: "addressId harus berupa angka",
-    })
-    .int("addressId harus berupa bilangan bulat")
-    .positive("addressId tidak valid"),
-});
+**Response — Sukses `200 OK`**
+```json
+{
+  "data": "Pembayaran berhasil diverifikasi."
+}
+```
+
+**Response — Error**
+
+| Kondisi | HTTP | Pesan |
+|---|---|---|
+| Token tidak valid / bukan admin | `401` | `"Unauthorized"` |
+| Payment tidak ditemukan | `404` | `"Data pembayaran tidak ditemukan."` |
+| Payment bukan status `PENDING` | `400` | `"Pembayaran ini sudah diproses sebelumnya."` |
+
+---
+
+### Endpoint 3 — Admin Tolak Pembayaran
+
+```
+PATCH /api/admin/payments/:id/reject
+Authorization: Bearer <token-admin>
+Content-Type: application/json
+```
+
+**Request Body**
+```json
+{
+  "reason": "Nominal transfer kurang, seharusnya Rp 150.000"
+}
+```
+
+| Field | Tipe | Wajib | Keterangan |
+|---|---|---|---|
+| `reason` | String | ✅ | Alasan penolakan, wajib diisi, maks 255 karakter |
+
+**Response — Sukses `200 OK`**
+```json
+{
+  "data": "Pembayaran ditolak."
+}
+```
+
+**Response — Error**
+
+| Kondisi | HTTP | Pesan |
+|---|---|---|
+| Token tidak valid / bukan admin | `401` | `"Unauthorized"` |
+| Payment tidak ditemukan | `404` | `"Data pembayaran tidak ditemukan."` |
+| Payment bukan status `PENDING` | `400` | `"Pembayaran ini sudah diproses sebelumnya."` |
+| `reason` tidak dikirim | `400` | `"Alasan penolakan wajib diisi."` |
+
+---
+
+## 3. Struktur Folder & Penempatan File
+
+File baru yang perlu dibuat (✨), file yang perlu dimodifikasi (✏️):
+
+```
+backend/
+├── src/
+│   ├── controller/
+│   │   ├── payment-controller.js        ✨ Customer: upload bukti bayar
+│   │   └── payment-admin-controller.js  ✨ Admin: verify & reject
+│   │
+│   ├── services/
+│   │   ├── payment-service.js           ✨ Logika upload customer
+│   │   └── payment-admin-service.js     ✨ Logika verify & reject admin
+│   │
+│   ├── validation/
+│   │   └── payment-validation.js        ✨ Semua schema Zod untuk payment
+│   │
+│   ├── middleware/
+│   │   └── upload-middleware.js         ✏️ Tambah config upload untuk bukti bayar
+│   │
+│   └── routes/
+│       ├── api.js                       ✏️ Tambah POST /api/orders/:orderId/payment
+│       └── admin-api.js                 ✏️ Tambah PATCH verify & reject
+│
+└── tests/
+    ├── payment.test.js                  ✨ Test endpoint customer
+    └── payment-admin.test.js            ✨ Test endpoint admin
 ```
 
 ---
 
-### Step 2 — Buat Service (`src/services/order-service.js`)
+## 4. Step-by-Step Implementasi
 
-Buat file baru `src/services/order-service.js`.
+### Step 1 — Buat Validation Schema (`src/validation/payment-validation.js`)
 
-Buat dan export satu fungsi async bernama `createOrder(user, request)`.
+Buat file baru `src/validation/payment-validation.js`. Buat dan export 2 schema Zod:
 
-Di dalam fungsi ini, lakukan langkah-langkah berikut **secara berurutan**:
+```js
+// Schema untuk admin verify — notes opsional
+export const verifyPaymentValidation = z.object({
+  notes: z.string().max(255, "Catatan maksimal 255 karakter.").optional(),
+});
 
-**2a. Validasi input**
+// Schema untuk admin reject — reason wajib
+export const rejectPaymentValidation = z.object({
+  reason: z.string({
+    required_error: "Alasan penolakan wajib diisi.",
+  }).min(1, "Alasan penolakan wajib diisi.").max(255, "Alasan maksimal 255 karakter."),
+});
+```
 
-- Validasi `request` menggunakan `createOrderValidation` dari Zod.
-- Jika gagal, lempar `ResponseError(400, pesan)`.
-
-**2b. Validasi alamat**
-
-- Query `Address` dengan kondisi `id = addressId AND userId = user.id`.
-- Jika tidak ditemukan, lempar `ResponseError(404, "Alamat tidak ditemukan")`.
-
-**2c. Ambil isi keranjang**
-
-- Query `Cart` milik user, include `CartItem` beserta relasi `ProductVariant` → `Product`, `Flavor`, `Size`.
-- Gunakan kondisi: `cart.userId = user.id`.
-- Jika `cart` tidak ada atau `cart.items` kosong, lempar `ResponseError(400, "Keranjang belanja masih kosong")`.
-
-**2d. Validasi ketersediaan varian**
-
-- Loop setiap `CartItem`, cek `cartItem.variant.isAvailable === true`.
-- Jika ada yang `false`, lempar `ResponseError(400, "Produk [product.name] varian [flavor.name]/[size.name] sudah tidak tersedia")`.
-
-**2e. Hitung total harga**
-
-- Loop setiap `CartItem`, hitung `subtotal = cartItem.quantity * cartItem.variant.price`.
-- Jumlahkan semua subtotal menjadi `totalPrice`.
-
-**2f. Hitung estimasi & kapasitas produksi**
-
-- Tentukan `startDate` = hari ini (tanggal server, bukan client).
-- Query `ProductionQueue` untuk menghitung jumlah order per hari mulai dari `startDate`.
-- Cari hari pertama yang jumlah ordernya < 10 (kapasitas maks).
-- Hari itu menjadi `productionDate` (tanggal mulai produksi).
-- `estimated_done_date` = `productionDate` + `product.production_time_days` (ambil dari produk dengan `production_time_days` terbesar di cart, atau rata-rata — tentukan sendiri dan dokumentasikan pilihan ini di kode).
-- Jika tidak ada hari yang tersedia dalam 30 hari ke depan, lempar `ResponseError(400, "Kapasitas produksi penuh, silakan coba beberapa saat lagi")`.
-
-**2g. Jalankan transaksi Prisma**
-
-Gunakan `prisma.$transaction(async (tx) => { ... })` untuk operasi berikut:
-
-1. Buat record `Order`:
-
-   ```
-   status: "PENDING_PAYMENT"
-   userId: user.id
-   addressId: address.id
-   totalPrice: totalPrice
-   paymentDeadline: sekarang + 24 jam
-   estimatedDoneDate: estimated_done_date
-   ```
-
-2. Buat semua `OrderItem` (snapshot) — loop dari CartItem:
-
-   ```
-   orderId: order.id
-   productVariantId: cartItem.variantId
-   productName: cartItem.variant.product.name   ← snapshot
-   flavorName: cartItem.variant.flavor.name     ← snapshot
-   sizeName: cartItem.variant.size.name         ← snapshot
-   quantity: cartItem.quantity
-   unitPrice: cartItem.variant.price            ← snapshot
-   subtotal: cartItem.quantity * cartItem.variant.price
-   ```
-
-3. Buat record `ProductionQueue`:
-
-   ```
-   orderId: order.id
-   scheduledDate: productionDate
-   ```
-
-4. Hapus semua `CartItem` milik cart user (kosongkan keranjang):
-   ```
-   deleteMany where cartId = cart.id
-   ```
-
-**2h. Return response**
-
-- Setelah transaksi berhasil, query ulang `Order` by id dengan include `OrderItem` dan `Address`.
-- Format dan return data sesuai spesifikasi response di bagian 2.
+> **Catatan**: Validasi file upload tidak dilakukan via Zod — ditangani di middleware upload (Step 2).
 
 ---
 
-### Step 3 — Buat Controller (`src/controller/order-controller.js`)
+### Step 2 — Update Upload Middleware (`src/middleware/upload-middleware.js`)
 
-Buat file baru `src/controller/order-controller.js`.
+Buka file `upload-middleware.js` yang sudah ada. Tambahkan konfigurasi khusus untuk bukti pembayaran:
 
-Buat dan export satu fungsi async bernama `create(req, res, next)`:
+- Buat fungsi/middleware baru bernama `uploadPaymentProof`
+- Konfigurasi:
+  - Hanya terima file dengan `mimetype`: `image/jpeg`, `image/png`, `image/webp`
+  - Batas ukuran file: **2MB** (`2 * 1024 * 1024` bytes)
+  - Jika file bukan gambar → lempar error dengan pesan `"File harus berupa gambar (jpg, png, webp)."`
+  - Jika file terlalu besar → lempar error dengan pesan `"Ukuran file maksimal 2MB."`
+  - Upload ke Cloudinary folder: `utique/payments`
+  - Field name yang diterima: `proof_image`
+- Export `uploadPaymentProof` dari file ini
+
+---
+
+### Step 3 — Buat Payment Service (`src/services/payment-service.js`)
+
+Buat file baru `src/services/payment-service.js`. Buat dan export satu fungsi async `uploadProof(userId, orderId, file)`.
+
+Lakukan langkah berikut secara berurutan:
+
+**3a. Validasi file**
+- Jika `file` tidak ada / undefined → lempar `ResponseError(400, "Bukti pembayaran wajib diupload.")`
+
+**3b. Validasi order**
+- Query `Order` dengan kondisi `id = orderId AND userId = userId`
+- Jika tidak ditemukan → lempar `ResponseError(404, "Pesanan tidak ditemukan.")`
+- Jika `order.status !== "PENDING_PAYMENT"` → lempar `ResponseError(400, "Pesanan ini tidak menunggu pembayaran.")`
+- Jika `new Date() > order.paymentDeadline` → lempar `ResponseError(400, "Batas waktu pembayaran sudah habis.")`
+
+**3c. Cek duplikasi payment**
+- Query `Payment` dengan kondisi:
+  ```
+  orderId = orderId AND status IN ["PENDING", "VERIFIED"]
+  ```
+- Jika sudah ada → lempar `ResponseError(400, "Bukti pembayaran sudah pernah diupload.")`
+- **Penjelasan logika**: Payment berstatus `REJECTED` boleh ada — artinya customer boleh upload ulang setelah ditolak. Yang tidak boleh adalah upload baru kalau sudah ada yang `PENDING` (menunggu review admin) atau `VERIFIED` (sudah lunas).
+
+**3d. Ambil URL dari hasil upload Cloudinary**
+- Middleware upload di Step 2 sudah menjalankan upload ke Cloudinary sebelum fungsi ini dipanggil
+- URL hasil upload tersedia di `file.path` atau `file.secure_url` (tergantung konfigurasi middleware yang ada)
+- Simpan URL ini sebagai `proofImageUrl`
+
+**3e. Buat record Payment**
+- Buat `Payment` baru di database:
+  ```
+  orderId: orderId
+  proofImageUrl: proofImageUrl
+  status: "PENDING"
+  ```
+- Return data payment yang baru dibuat (id, orderId, proofImageUrl, status, createdAt)
+
+---
+
+### Step 4 — Buat Payment Admin Service (`src/services/payment-admin-service.js`)
+
+Buat file baru `src/services/payment-admin-service.js`. Buat dan export 2 fungsi async:
+
+#### Fungsi `verify(paymentId, request)`
+
+**4a. Validasi input**
+- Validasi `request` menggunakan `verifyPaymentValidation`
+
+**4b. Cek payment**
+- Query `Payment` dengan kondisi `id = paymentId`, sertakan relasi `order`
+- Jika tidak ditemukan → lempar `ResponseError(404, "Data pembayaran tidak ditemukan.")`
+- Jika `payment.status !== "PENDING"` → lempar `ResponseError(400, "Pembayaran ini sudah diproses sebelumnya.")`
+
+**4c. Jalankan transaksi**
+- Gunakan `prisma.$transaction()` untuk 2 operasi berikut sekaligus:
+  1. Update `Payment`:
+     ```
+     status: "VERIFIED"
+     notes: request.notes (boleh null)
+     verifiedAt: new Date()
+     ```
+  2. Update `Order` (gunakan `payment.orderId`):
+     ```
+     status: "PAID"
+     ```
+- Return string `"Pembayaran berhasil diverifikasi."`
+
+#### Fungsi `reject(paymentId, request)`
+
+**4a. Validasi input**
+- Validasi `request` menggunakan `rejectPaymentValidation`
+
+**4b. Cek payment**
+- Query `Payment` dengan kondisi `id = paymentId`
+- Jika tidak ditemukan → lempar `ResponseError(404, "Data pembayaran tidak ditemukan.")`
+- Jika `payment.status !== "PENDING"` → lempar `ResponseError(400, "Pembayaran ini sudah diproses sebelumnya.")`
+
+**4c. Update Payment**
+- Update `Payment`:
+  ```
+  status: "REJECTED"
+  rejectionReason: request.reason
+  ```
+- **Penting**: Order status **tidak diubah** — tetap `PENDING_PAYMENT` agar customer bisa upload ulang bukti baru
+- Return string `"Pembayaran ditolak."`
+
+---
+
+### Step 5 — Buat Payment Controller (`src/controller/payment-controller.js`)
+
+Buat file baru `src/controller/payment-controller.js`. Buat dan export satu fungsi async `upload(req, res, next)`:
 
 ```js
-export const create = async (req, res, next) => {
+const upload = async (req, res, next) => {
   try {
-    const result = await createOrder(req.user, req.body);
+    const userId = req.user.id;
+    const orderId = req.params.orderId;
+    const file = req.file; // tersedia setelah melewati uploadPaymentProof middleware
+    const result = await paymentService.uploadProof(userId, orderId, file);
     res.status(201).json({ data: result });
   } catch (e) {
     next(e);
@@ -219,105 +325,216 @@ export const create = async (req, res, next) => {
 };
 ```
 
-`req.user` sudah diset oleh `auth-middleware.js` (sudah ada).
+---
+
+### Step 6 — Buat Payment Admin Controller (`src/controller/payment-admin-controller.js`)
+
+Buat file baru `src/controller/payment-admin-controller.js`. Buat dan export 2 fungsi async:
+
+```js
+const verify = async (req, res, next) => {
+  try {
+    const paymentId = req.params.id;
+    const result = await paymentAdminService.verify(paymentId, req.body);
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+};
+
+const reject = async (req, res, next) => {
+  try {
+    const paymentId = req.params.id;
+    const result = await paymentAdminService.reject(paymentId, req.body);
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+};
+```
 
 ---
 
-### Step 4 — Daftarkan Route (`src/routes/api.js`)
+### Step 7 — Daftarkan Route
 
-Buka file `src/routes/api.js` yang sudah ada.
-
-Import controller:
+**Di `src/routes/api.js`** — tambahkan route customer:
 
 ```js
-import * as orderController from "../controller/order-controller.js";
+import paymentController from '../controller/payment-controller.js';
+import { uploadPaymentProof } from '../middleware/upload-middleware.js';
+
+// Payment Routes
+apiRouter.post(
+  '/api/orders/:orderId/payment',
+  uploadPaymentProof,           // ← middleware upload HARUS sebelum controller
+  paymentController.upload
+);
 ```
 
-Tambahkan route baru:
+> **Penting**: `uploadPaymentProof` middleware harus diletakkan **sebelum** controller. Middleware ini yang menangani parsing `multipart/form-data` dan upload ke Cloudinary. Setelah middleware selesai, hasil upload tersedia di `req.file` untuk diakses oleh controller.
+
+**Di `src/routes/admin-api.js`** — tambahkan route admin:
 
 ```js
-apiRouter.post("/orders", orderController.create);
-```
+import paymentAdminController from '../controller/payment-admin-controller.js';
 
-Pastikan route ini berada **di bawah** middleware auth (sudah terpasang di level router).
+// Payment Admin Routes
+adminRouter.patch('/api/admin/payments/:id/verify', paymentAdminController.verify);
+adminRouter.patch('/api/admin/payments/:id/reject', paymentAdminController.reject);
+```
 
 ---
 
-### Step 5 — Buat Unit Test (`tests/order.test.js`)
+### Step 8 — Buat Unit Test Customer (`tests/payment.test.js`)
 
-Buat file baru `tests/order.test.js`.
-
-Gunakan pendekatan **integration test** dengan `supertest` dan database test nyata (sama seperti test file lain yang sudah ada — lihat `test-util.js` untuk helper).
+Buat file baru `tests/payment.test.js`. Gunakan integration test dengan `supertest`.
 
 **Setup & Teardown**
 
-- `beforeEach`: Buat user test, buat address test, buat produk + variant test, buat cart + cart item test. Gunakan helper dari `test-util.js` atau buat fungsi helper lokal.
-- `afterEach`: Hapus semua data test (order, cart, product, address, user) agar test tidak saling interferensi.
+- `beforeEach`:
+  1. Buat user test via `createTestUser()`
+  2. Buat product, variant, flavor, size via helper yang sudah ada
+  3. Buat cart + cart item
+  4. Buat address test
+  5. Buat order dulu via `POST /api/orders` agar punya `orderId` valid dengan status `PENDING_PAYMENT`
+  6. Simpan `orderId` dari response untuk dipakai di test
+
+- `afterEach`: Hapus semua data test (payment, order, cart, product, address, user) dalam urutan yang benar mengikuti foreign key
 
 **Test Cases yang wajib dibuat:**
 
 ```
-✅ Berhasil membuat order dari keranjang yang valid
-   - Kirim request dengan addressId yang valid
+✅ Berhasil upload bukti pembayaran
+   - Kirim multipart/form-data dengan file gambar valid (gunakan buffer/fixture image kecil)
    - Cek response status 201
-   - Cek response body memiliki: id, status, payment_deadline, estimated_done_date, total_price, address, items
-   - Cek status order = "PENDING_PAYMENT"
-   - Cek cart kosong setelah checkout (query CartItem = 0)
-   - Cek ProductionQueue dibuat
+   - Cek response body memiliki: id, orderId, proofImageUrl, status: "PENDING"
+   - proofImageUrl harus berupa string URL yang valid
 
 ✅ Gagal jika tidak ada token (401)
 
-✅ Gagal jika addressId tidak dikirim (400)
+✅ Gagal jika orderId bukan milik user yang login (404)
 
-✅ Gagal jika addressId bukan integer (400)
+✅ Gagal jika order bukan status PENDING_PAYMENT (400)
+   - Update status order ke "PAID" langsung via Prisma, lalu coba upload
+   - Expect response 400
 
-✅ Gagal jika addressId milik user lain (404)
+✅ Gagal jika order sudah melewati payment_deadline (400)
+   - Update paymentDeadline ke masa lalu langsung via Prisma, lalu coba upload
+   - Expect response 400
 
-✅ Gagal jika keranjang kosong (400)
+✅ Gagal jika sudah ada payment PENDING untuk order yang sama (400)
+   - Upload pertama berhasil (status 201)
+   - Upload kedua dengan file yang sama harus gagal dengan status 400
 
-✅ Gagal jika salah satu varian tidak tersedia / isAvailable: false (400)
+✅ Gagal jika tidak ada file yang dikirim (400)
+   - Kirim request tanpa field proof_image
+   - Expect response 400
 ```
 
 ---
 
-## 4. Acceptance Criteria
+### Step 9 — Buat Unit Test Admin (`tests/payment-admin.test.js`)
 
-### Fungsionalitas
+Buat file baru `tests/payment-admin.test.js`.
 
-- [ ] `POST /api/orders` berhasil membuat order dari cart yang valid dan mengembalikan status `201`
-- [ ] Response body sesuai format spesifikasi (ada `id`, `status`, `payment_deadline`, `estimated_done_date`, `total_price`, `address`, `items`)
-- [ ] `status` order yang baru dibuat selalu `PENDING_PAYMENT`
-- [ ] `payment_deadline` diset +24 jam dari waktu checkout
-- [ ] `total_price` dihitung dari database (ProductVariant.price × quantity), bukan dari client
-- [ ] Data `OrderItem` berisi snapshot (`product_name`, `flavor_name`, `size_name`, `unit_price`) — bukan foreign key ke master data
-- [ ] Cart dikosongkan (CartItem dihapus) setelah order berhasil dibuat
-- [ ] Record `ProductionQueue` dibuat untuk order baru
+**Setup & Teardown**
+
+- `beforeEach`:
+  1. Buat user + admin test
+  2. Buat order dengan status `PENDING_PAYMENT` (buat langsung via Prisma, tidak perlu lewat API)
+  3. Buat payment dengan status `PENDING` langsung via Prisma (tidak perlu lewat API upload)
+  4. Simpan `paymentId` untuk dipakai di test
+
+- `afterEach`: Hapus semua data test
+
+**Test Cases yang wajib dibuat:**
+
+```
+✅ Admin berhasil verifikasi pembayaran
+   - Kirim PATCH dengan body kosong (notes opsional)
+   - Cek response status 200
+   - Cek response data = "Pembayaran berhasil diverifikasi."
+   - Query DB: cek Payment.status = "VERIFIED"
+   - Query DB: cek Order.status = "PAID"
+
+✅ Admin berhasil verifikasi dengan notes
+   - Kirim PATCH dengan body { notes: "Transfer sudah masuk" }
+   - Cek response status 200
+   - Query DB: cek Payment.notes tersimpan
+
+✅ Gagal verifikasi jika bukan admin (401)
+   - Gunakan token customer biasa
+
+✅ Gagal verifikasi jika paymentId tidak ditemukan (404)
+   - Gunakan ID yang tidak ada, misal "nonexistent-id"
+
+✅ Gagal verifikasi jika payment bukan status PENDING (400)
+   - Update payment status ke "VERIFIED" via Prisma, lalu coba verifikasi lagi
+   - Expect response 400
+
+✅ Admin berhasil menolak pembayaran
+   - Kirim PATCH dengan body { reason: "Nominal kurang" }
+   - Cek response status 200
+   - Cek response data = "Pembayaran ditolak."
+   - Query DB: cek Payment.status = "REJECTED"
+   - Query DB: cek Order.status TETAP "PENDING_PAYMENT" (tidak berubah)
+
+✅ Gagal reject jika reason tidak dikirim (400)
+   - Kirim PATCH tanpa body / body kosong
+
+✅ Gagal reject jika payment bukan status PENDING (400)
+   - Update payment status ke "REJECTED" via Prisma, lalu coba reject lagi
+
+✅ Gagal reject jika bukan admin (401)
+```
+
+---
+
+## 5. Acceptance Criteria
+
+### Fungsionalitas — Upload Bukti Bayar
+- [ ] `POST /api/orders/:orderId/payment` berhasil membuat Payment dan mengembalikan status `201`
+- [ ] Foto bukti bayar berhasil diupload ke Cloudinary folder `utique/payments`
+- [ ] URL foto tersimpan di field `Payment.proofImageUrl`
+- [ ] Payment baru selalu dibuat dengan status `PENDING`
+- [ ] Customer bisa upload ulang setelah payment sebelumnya `REJECTED`
+- [ ] Customer tidak bisa upload jika sudah ada payment `PENDING` atau `VERIFIED`
+
+### Fungsionalitas — Verifikasi Admin
+- [ ] `PATCH /api/admin/payments/:id/verify` mengubah `Payment.status` → `VERIFIED`
+- [ ] Saat diverifikasi, `Order.status` ikut berubah → `PAID` dalam satu `prisma.$transaction()`
+- [ ] Field `notes` opsional — tidak wajib diisi saat verifikasi
+- [ ] Tidak bisa verifikasi payment yang sudah `VERIFIED` atau `REJECTED`
+
+### Fungsionalitas — Penolakan Admin
+- [ ] `PATCH /api/admin/payments/:id/reject` mengubah `Payment.status` → `REJECTED`
+- [ ] Saat ditolak, `Order.status` **tidak berubah** — tetap `PENDING_PAYMENT`
+- [ ] Field `reason` wajib diisi saat menolak
+- [ ] Tidak bisa menolak payment yang sudah `VERIFIED` atau `REJECTED`
 
 ### Validasi & Error Handling
-
-- [ ] Request tanpa token → `401`
-- [ ] `addressId` tidak dikirim → `400` dengan pesan Bahasa Indonesia
-- [ ] `addressId` bukan milik user yang login → `404`
-- [ ] Cart kosong → `400` dengan pesan Bahasa Indonesia
-- [ ] Varian tidak tersedia → `400` dengan pesan menyebut nama produk & varian
-- [ ] Kapasitas produksi penuh → `400` dengan pesan Bahasa Indonesia
+- [ ] Upload tanpa file → `400` dengan pesan Bahasa Indonesia
+- [ ] Upload file bukan gambar → `400`
+- [ ] Upload file > 2MB → `400`
+- [ ] Upload ke order bukan milik user → `404`
+- [ ] Upload ke order yang sudah lewat deadline → `400`
+- [ ] Reject tanpa `reason` → `400` dengan pesan Bahasa Indonesia
+- [ ] Semua endpoint tanpa token → `401`
+- [ ] Admin endpoint diakses dengan token customer → `401`
 
 ### Keamanan & Konsistensi
-
-- [ ] Harga tidak bisa dimanipulasi dari client (diambil dari DB)
-- [ ] Semua operasi DB dalam satu `prisma.$transaction()` — jika satu gagal, semua rollback
-- [ ] Query alamat selalu menyertakan `userId = user.id` (data isolation)
-- [ ] Query cart selalu menyertakan `userId = user.id` (data isolation)
+- [ ] Verify + update order status dijalankan dalam satu `prisma.$transaction()`
+- [ ] Query order selalu menyertakan `userId` (data isolation — customer tidak bisa akses order orang lain)
+- [ ] `payment_deadline` dicek dari nilai di DB, bukan dari input client
 
 ### Testing
-
-- [ ] Semua test case di Step 5 sudah dibuat
-- [ ] Semua test **lolos** (`bun test` atau `npm test` tidak ada yang fail)
-- [ ] Tidak ada data test yang tersisa setelah test selesai (cleanup di `afterEach`)
+- [ ] Semua test case di Step 8 dan Step 9 sudah dibuat
+- [ ] Semua test **lolos** (`bun test` tidak ada yang fail)
+- [ ] Order status setelah verify dan reject diverifikasi langsung dari DB (query Prisma), bukan hanya dari response API
+- [ ] Tidak ada data test yang tersisa setelah test selesai (`afterEach` bersih)
 
 ### Kode
-
 - [ ] Setiap function memiliki komentar dokumentasi dalam Bahasa Indonesia
-- [ ] Error diteruskan ke `next(e)` di controller (tidak di-handle langsung)
-- [ ] Tidak ada logic database di controller (hanya di service)
-- [ ] File mengikuti konvensi nama: `kebab-case.js`
+- [ ] File mengikuti konvensi nama `kebab-case.js`
+- [ ] Tidak ada logika database di controller (hanya di service)
+- [ ] Error diteruskan ke `next(e)` di controller

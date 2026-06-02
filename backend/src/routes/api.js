@@ -3,14 +3,14 @@ import { authMiddleware } from "../middleware/auth-middleware.js";
 import userController from "../controller/user-controller.js";
 import cartController from "../controller/cart-controller.js";
 import orderController from "../controller/order-controller.js";
+import paymentController from "../controller/payment-controller.js";
+import { uploadPaymentProof } from "../middleware/upload-middleware.js";
 
 export const apiRouter = express.Router();
-
-// Semua route di bawah ini membutuhkan autentikasi
 apiRouter.use(authMiddleware);
 
 // ==========================================
-// User Routes (Authorized)
+// User Routes (Profile)
 // ==========================================
 apiRouter.get("/api/users/current", userController.get);
 apiRouter.patch("/api/users/current", userController.update);
@@ -42,7 +42,7 @@ apiRouter.get("/api/orders/:id", orderController.get);
 // ==========================================
 // Payment Routes
 // ==========================================
-// TODO: POST /api/orders/:orderId/payment — Upload bukti bayar
+apiRouter.post("/api/orders/:orderId/payment", uploadPaymentProof, paymentController.upload);
 
 // ==========================================
 // Review Routes

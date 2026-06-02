@@ -243,11 +243,12 @@ model OrderItem {
 model Payment {
   id             Int           @id @default(autoincrement())
   orderId        Int           @unique @map("order_id")
-  bankName       String        @map("bank_name") @db.VarChar(50) // BCA, BNI, dll
-  accountHolder  String        @map("account_holder") @db.VarChar(100) // Nama pengirim
-  amount         Int // Jumlah transfer
+  bankName       String?       @map("bank_name") @db.VarChar(50) // BCA, BNI, dll
+  accountHolder  String?       @map("account_holder") @db.VarChar(100) // Nama pengirim
+  amount         Int? // Jumlah transfer
   proofImageUrl  String        @map("proof_image_url") @db.VarChar(500) // URL bukti transfer
   status         PaymentStatus @default(PENDING)
+  adminNotes     String?       @map("admin_notes") @db.Text
   rejectReason   String?       @map("reject_reason") @db.Text
   verifiedAt     DateTime?     @map("verified_at")
   createdAt      DateTime      @default(now()) @map("created_at")

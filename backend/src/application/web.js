@@ -25,9 +25,10 @@ web.use(
 );
 
 // Rate limiting — batasi jumlah request per IP
+// Dinonaktifkan saat testing untuk menghindari error 429
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 menit
-  limit: 100, // Maksimal 100 request per window
+  limit: process.env.NODE_ENV === "test" ? 1000 : 100, // Tingkatkan limit saat test
   standardHeaders: "draft-8",
   legacyHeaders: false,
   message: { error: "Terlalu banyak request, coba lagi nanti." },

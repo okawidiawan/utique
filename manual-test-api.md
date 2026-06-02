@@ -39,6 +39,9 @@ Dokumentasi ini berisi daftar endpoint API Utique yang disusun berdasarkan tahap
 | **6** | **POST** | `/api/orders` | Checkout (Buat Order) | User |
 | **6** | **GET** | `/api/orders` | List pesanan saya | User |
 | **6** | **GET** | `/api/orders/:id` | Detail pesanan | User |
+| **7** | **POST** | `/api/orders/:orderId/payment` | Upload bukti bayar | User |
+| **7** | **PATCH** | `/api/admin/payments/:id/verify` | Verifikasi bayar | Admin |
+| **7** | **PATCH** | `/api/admin/payments/:id/reject` | Tolak bayar | Admin |
 
 ---
 
@@ -188,6 +191,26 @@ Dokumentasi ini berisi daftar endpoint API Utique yang disusun berdasarkan tahap
 
 ### Order Detail
 - **URL:** `GET http://localhost:5000/api/orders/:id`
+
+---
+
+## Tahap 7: Pembayaran (Payment)
+
+### Upload Bukti Pembayaran
+- **URL:** `POST http://localhost:5000/api/orders/:orderId/payment`
+- **Body (multipart/form-data):**
+  - `proof_image`: File (jpg/png/webp)
+- **Keterangan:** Mengupload bukti transfer. Status order tetap `PENDING_PAYMENT`, status payment `PENDING`.
+
+### Verifikasi Pembayaran (Admin)
+- **URL:** `PATCH http://localhost:5000/api/admin/payments/:id/verify`
+- **Body:** `{"notes": "Sudah masuk Rp 150.000"}`
+- **Keterangan:** Mengubah status payment ke `VERIFIED` dan status order ke `PAID`.
+
+### Tolak Pembayaran (Admin)
+- **URL:** `PATCH http://localhost:5000/api/admin/payments/:id/reject`
+- **Body:** `{"reason": "Bukti tidak jelas"}`
+- **Keterangan:** Mengubah status payment ke `REJECTED`. Status order tetap `PENDING_PAYMENT`.
 
 ---
 
