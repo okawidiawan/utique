@@ -231,11 +231,11 @@ PENDING → VERIFIED
 
 ### Tahap 8 — Manajemen Order Admin
 
-32. [ ] `GET /api/admin/orders` — Mengambil semua order (filter status)
-33. [ ] `GET /api/admin/orders/:id` — Mengambil detail order
-34. [ ] `PATCH /api/admin/orders/:id/status` — Mengubah status order
-35. [ ] `PATCH /api/admin/orders/:id/shipping` — Input info pengiriman (resi, kurir)
-36. [ ] `PATCH /api/admin/orders/:id/estimation` — Override estimasi pembuatan
+32. [x] `GET /api/admin/orders` — Mengambil semua order (filter status)
+33. [x] `GET /api/admin/orders/:id` — Mengambil detail order
+34. [x] `PATCH /api/admin/orders/:id/status` — Mengubah status order
+35. [x] `PATCH /api/admin/orders/:id/shipping` — Input info pengiriman (resi, kurir)
+36. [x] `PATCH /api/admin/orders/:id/estimation` — Override estimasi pembuatan
 
 ### Tahap 9 — Review _(Fase 2)_
 

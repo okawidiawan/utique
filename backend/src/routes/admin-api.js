@@ -5,6 +5,7 @@ import { adminMiddleware } from "../middleware/admin-middleware.js";
 import masterAdminController from "../controller/master-admin-controller.js";
 import productAdminController from "../controller/product-admin-controller.js";
 import paymentAdminController from "../controller/payment-admin-controller.js";
+import adminOrderController from "../controller/admin-order-controller.js";
 
 export const adminRouter = express.Router();
 
@@ -37,11 +38,11 @@ adminRouter.delete("/api/admin/variants/:id", productAdminController.removeVaria
 // ==========================================
 // Order Management Routes
 // ==========================================
-// TODO: GET /api/admin/orders — List semua order
-// TODO: GET /api/admin/orders/:id — Detail order
-// TODO: PATCH /api/admin/orders/:id/status — Update status order
-// TODO: PATCH /api/admin/orders/:id/shipping — Input resi
-// TODO: PATCH /api/admin/orders/:id/estimation — Override estimasi
+adminRouter.get("/api/admin/orders", adminOrderController.getAll);
+adminRouter.get("/api/admin/orders/:id", adminOrderController.getById);
+adminRouter.patch("/api/admin/orders/:id/status", adminOrderController.updateStatus);
+adminRouter.patch("/api/admin/orders/:id/shipping", adminOrderController.updateShipping);
+adminRouter.patch("/api/admin/orders/:id/estimation", adminOrderController.updateEstimation);
 
 // ==========================================
 // Payment Verification Routes

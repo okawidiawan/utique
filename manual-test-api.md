@@ -42,6 +42,11 @@ Dokumentasi ini berisi daftar endpoint API Utique yang disusun berdasarkan tahap
 | **7** | **POST** | `/api/orders/:orderId/payment` | Upload bukti bayar | User |
 | **7** | **PATCH** | `/api/admin/payments/:id/verify` | Verifikasi bayar | Admin |
 | **7** | **PATCH** | `/api/admin/payments/:id/reject` | Tolak bayar | Admin |
+| **8** | **GET** | `/api/admin/orders` | List semua order (Admin) | Admin |
+| **8** | **GET** | `/api/admin/orders/:id` | Detail order (Admin) | Admin |
+| **8** | **PATCH** | `/api/admin/orders/:id/status` | Update status order | Admin |
+| **8** | **PATCH** | `/api/admin/orders/:id/shipping` | Input info pengiriman | Admin |
+| **8** | **PATCH** | `/api/admin/orders/:id/estimation` | Override estimasi | Admin |
 
 ---
 
@@ -211,6 +216,118 @@ Dokumentasi ini berisi daftar endpoint API Utique yang disusun berdasarkan tahap
 - **URL:** `PATCH http://localhost:5000/api/admin/payments/:id/reject`
 - **Body:** `{"reason": "Bukti tidak jelas"}`
 - **Keterangan:** Mengubah status payment ke `REJECTED`. Status order tetap `PENDING_PAYMENT`.
+
+---
+
+## Tahap 8: Manajemen Order Admin
+
+### List Semua Order (Admin)
+- **URL:** `GET http://localhost:5000/api/admin/orders`
+- **Headers:** `Authorization: Bearer <admin_token>`
+- **Query Params:** `?status=PAID&page=1&size=10`
+- **Response Sukses (200 OK):**
+  ```json
+  {
+    "data": [
+      {
+        "id": 1,
+        "status": "PAID",
+        "total_price": 150000,
+        "shipping_courier": "JNE",
+        "created_at": "2025-06-01T10:00:00.000Z",
+        "payment_deadline": "2025-06-02T10:00:00.000Z",
+        "user": {
+          "id": 1,
+          "name": "Budi Santoso",
+          "email": "budi@example.com",
+          "phone": "08123456789"
+        }
+      }
+    ],
+    "paging": {
+      "page": 1,
+      "total_item": 1,
+      "total_page": 1
+    }
+  }
+  ```
+
+### Detail Order (Admin)
+- **URL:** `GET http://localhost:5000/api/admin/orders/:id`
+- **Headers:** `Authorization: Bearer <admin_token>`
+- **Response Sukses (200 OK):**
+  ```json
+  {
+    "data": {
+      "id": 1,
+      "status": "PAID",
+      "total_price": 150000,
+      "shipping_courier": "JNE",
+      "shipping_tracking_number": null,
+      "estimated_completion_date": "2025-06-05",
+      "notes": null,
+      "created_at": "2025-06-01T10:00:00.000Z",
+      "payment_deadline": "2025-06-02T10:00:00.000Z",
+      "user": {
+        "id": 1,
+        "name": "Budi Santoso",
+        "email": "budi@example.com",
+        "phone": "08123456789"
+      },
+      "address": {
+        "label": "Rumah",
+        "recipient_name": "Budi",
+        "phone": "08123456789",
+        "province": "Jawa Barat",
+        "city": "Bandung",
+        "district": "Coblong",
+        "postal_code": "40132",
+        "full_address": "Jl. Ganesha No 10"
+      },
+      "items": [
+        {
+          "id": 1,
+          "quantity": 2,
+          "price": 75000,
+          "product_name": "Classic Choco Cookies",
+          "flavor_name": "Double Choco",
+          "size_name": "Large Jar"
+        }
+      ],
+      "payment": {
+        "id": 1,
+        "status": "VERIFIED",
+        "proof_image_url": "https://cloudinary.com/...",
+        "verified_at": "2025-06-01T12:00:00.000Z",
+        "notes": "Sudah masuk Rp 150.000"
+      }
+    }
+  }
+  ```
+
+### Update Status Order (Admin)
+- **URL:** `PATCH http://localhost:5000/api/admin/orders/:id/status`
+- **Headers:** `Authorization: Bearer <admin_token>`
+- **Body:** `{"status": "IN_QUEUE"}`
+- **Keterangan:** Mengubah status order. Transisi harus valid (PAID -> IN_QUEUE -> IN_PRODUCTION -> DONE -> SHIPPED -> COMPLETED).
+
+### Input Info Pengiriman (Admin)
+- **URL:** `PATCH http://localhost:5000/api/admin/orders/:id/shipping`
+- **Headers:** `Authorization: Bearer <admin_token>`
+- **Body:**
+  ```json
+  {
+    "shipping_tracking_number": "JNE123456789",
+    "shipping_courier": "JNE"
+  }
+  ```
+- **Keterangan:** Hanya bisa dilakukan jika status order `DONE` atau `SHIPPED`.
+
+### Override Estimasi Selesai (Admin)
+- **URL:** `PATCH http://localhost:5000/api/admin/orders/:id/estimation`
+- **Headers:** `Authorization: Bearer <admin_token>`
+- **Body:** `{"estimated_completion_date": "2025-06-10"}`
+- **Keterangan:** Hanya bisa dilakukan jika status order `IN_QUEUE` atau `IN_PRODUCTION`.
 
 ---
 
