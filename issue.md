@@ -1,351 +1,503 @@
-# Issue: Feature — Implementasi API Pembayaran (Tahap 7)
+# Feature: Implementasi API Manajemen Order Admin (Tahap 8)
+
+---
 
 ## 1. Background & Tujuan
 
-Utique menggunakan sistem pembayaran **manual via transfer bank**. Tidak ada payment gateway otomatis. Alurnya adalah:
+Saat ini admin hanya bisa melakukan verifikasi/penolakan pembayaran (Tahap 7), tetapi belum bisa melihat daftar order secara menyeluruh maupun mengelola status order setelah pembayaran dikonfirmasi.
 
-1. Customer membuat order → status order `PENDING_PAYMENT`
-2. Customer transfer ke rekening toko
-3. Customer upload foto/screenshot bukti transfer melalui aplikasi
-4. Admin melihat bukti transfer, lalu memverifikasi atau menolak
-5. Jika **diverifikasi** → status order berubah menjadi `PAID`
-6. Jika **ditolak** (misal: kurang bayar, bukti tidak jelas, salah rekening) → status payment `REJECTED`, customer bisa upload ulang bukti baru
+Tahap 8 ini mengimplementasikan fitur manajemen order untuk admin, yang mencakup:
 
-Fitur ini mencakup 3 endpoint:
-- `POST /api/orders/:orderId/payment` — Customer upload bukti pembayaran
-- `PATCH /api/admin/payments/:id/verify` — Admin verifikasi pembayaran
-- `PATCH /api/admin/payments/:id/reject` — Admin tolak pembayaran
+- Melihat semua order yang masuk (dengan filter status)
+- Melihat detail satu order secara lengkap
+- Mengubah status order secara manual (misalnya dari `PAID` ke `IN_QUEUE`, `IN_QUEUE` ke `IN_PRODUCTION`, dst.)
+- Menginput informasi pengiriman (nomor resi dan nama kurir)
+- Meng-override estimasi tanggal selesai produksi
+
+Fitur ini adalah fondasi dari halaman `/admin/orders` dan `/admin/orders/:id` di frontend.
 
 ---
 
 ## 2. Spesifikasi Teknis
 
-### Status Flow yang Terlibat
+### Daftar Endpoint
 
+| No | Method | Endpoint | Deskripsi | Auth |
+| :- | :----- | :------- | :-------- | :--- |
+| 32 | GET | `/api/admin/orders` | Ambil semua order (filter status, paginasi) | Admin |
+| 33 | GET | `/api/admin/orders/:id` | Ambil detail satu order | Admin |
+| 34 | PATCH | `/api/admin/orders/:id/status` | Ubah status order | Admin |
+| 35 | PATCH | `/api/admin/orders/:id/shipping` | Input nomor resi & kurir | Admin |
+| 36 | PATCH | `/api/admin/orders/:id/estimation` | Override estimasi tanggal selesai | Admin |
+
+### Auth
+
+Semua endpoint memerlukan header:
 ```
-Order:    PENDING_PAYMENT ──(verify)──► PAID
-                          ◄─(reject)── (tetap PENDING_PAYMENT, bisa upload ulang)
+Authorization: Bearer <admin_token>
+```
+Middleware yang digunakan: `authMiddleware` + pengecekan `user.role === 'ADMIN'` (sudah diimplementasi di tahap sebelumnya via `adminRouter`).
 
-Payment:  PENDING ──► VERIFIED
-                 └──► REJECTED
+---
+
+### Endpoint 32 — GET /api/admin/orders
+
+**Deskripsi:** Mengambil semua order dari seluruh user. Admin dapat memfilter berdasarkan status dan melakukan paginasi.
+
+**Query Parameters:**
+
+| Parameter | Tipe | Wajib | Default | Keterangan |
+| :-------- | :--- | :---- | :------ | :--------- |
+| `status` | string | Tidak | (semua) | Filter berdasarkan status order. Nilai valid: `PENDING_PAYMENT`, `PAID`, `IN_QUEUE`, `IN_PRODUCTION`, `DONE`, `SHIPPED`, `COMPLETED`, `CANCELLED` |
+| `page` | number | Tidak | `1` | Halaman data |
+| `size` | number | Tidak | `10` | Jumlah data per halaman |
+
+**Contoh Request:**
+```
+GET /api/admin/orders?status=PAID&page=1&size=10
+Authorization: Bearer <admin_token>
+```
+
+**Contoh Response Sukses (200 OK):**
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "status": "PAID",
+      "total_price": 150000,
+      "shipping_courier": "JNE",
+      "created_at": "2025-06-01T10:00:00.000Z",
+      "payment_deadline": "2025-06-02T10:00:00.000Z",
+      "user": {
+        "id": 1,
+        "name": "Budi Santoso",
+        "email": "budi@example.com",
+        "phone": "08123456789"
+      }
+    }
+  ],
+  "paging": {
+    "page": 1,
+    "total_item": 1,
+    "total_page": 1
+  }
+}
+```
+
+**Contoh Response Error:**
+```json
+{ "error": "Unauthorized" }       // 401 - tidak ada token
+{ "error": "Forbidden" }          // 403 - bukan admin
+{ "error": "Status tidak valid" } // 400 - nilai status tidak dikenal
 ```
 
 ---
 
-### Endpoint 1 — Upload Bukti Pembayaran
+### Endpoint 33 — GET /api/admin/orders/:id
 
+**Deskripsi:** Mengambil detail lengkap satu order berdasarkan ID, termasuk item, informasi user, alamat pengiriman, dan data pembayaran.
+
+**Path Parameter:**
+- `id` (number, wajib) — ID order
+
+**Contoh Request:**
 ```
-POST /api/orders/:orderId/payment
-Authorization: Bearer <token-customer>
-Content-Type: multipart/form-data
+GET /api/admin/orders/1
+Authorization: Bearer <admin_token>
 ```
 
-**Request — multipart/form-data**
-
-| Field | Tipe | Wajib | Keterangan |
-|---|---|---|---|
-| `proof_image` | File (jpg/png/webp) | ✅ | Foto bukti transfer, maks 2MB |
-
-**Response — Sukses `201 Created`**
+**Contoh Response Sukses (200 OK):**
 ```json
 {
   "data": {
-    "id": "uuid",
-    "orderId": "uuid",
-    "proofImageUrl": "https://res.cloudinary.com/...",
-    "status": "PENDING",
-    "createdAt": "2026-06-03T10:00:00.000Z"
+    "id": 1,
+    "status": "PAID",
+    "total_price": 150000,
+    "shipping_courier": "JNE",
+    "shipping_tracking_number": null,
+    "estimated_completion_date": "2025-06-05",
+    "notes": null,
+    "created_at": "2025-06-01T10:00:00.000Z",
+    "payment_deadline": "2025-06-02T10:00:00.000Z",
+    "user": {
+      "id": 1,
+      "name": "Budi Santoso",
+      "email": "budi@example.com",
+      "phone": "08123456789"
+    },
+    "address": {
+      "label": "Rumah",
+      "recipient_name": "Budi",
+      "phone": "08123456789",
+      "province": "Jawa Barat",
+      "city": "Bandung",
+      "district": "Coblong",
+      "postal_code": "40132",
+      "full_address": "Jl. Ganesha No 10"
+    },
+    "items": [
+      {
+        "id": 1,
+        "quantity": 2,
+        "price": 75000,
+        "product_name": "Classic Choco Cookies",
+        "flavor_name": "Double Choco",
+        "size_name": "Large Jar"
+      }
+    ],
+    "payment": {
+      "id": 1,
+      "status": "VERIFIED",
+      "proof_image_url": "https://cloudinary.com/...",
+      "verified_at": "2025-06-01T12:00:00.000Z",
+      "notes": "Sudah masuk Rp 150.000"
+    }
   }
 }
 ```
 
-**Response — Error**
-
-| Kondisi | HTTP | Pesan |
-|---|---|---|
-| Token tidak valid | `401` | `"Unauthorized"` |
-| Order tidak ditemukan / bukan milik user | `404` | `"Pesanan tidak ditemukan."` |
-| Order bukan status `PENDING_PAYMENT` | `400` | `"Pesanan ini tidak menunggu pembayaran."` |
-| Order sudah melewati `payment_deadline` | `400` | `"Batas waktu pembayaran sudah habis."` |
-| Sudah ada payment `PENDING` atau `VERIFIED` | `400` | `"Bukti pembayaran sudah pernah diupload."` |
-| File tidak dikirim | `400` | `"Bukti pembayaran wajib diupload."` |
-| File bukan gambar | `400` | `"File harus berupa gambar (jpg, png, webp)."` |
-| File terlalu besar (> 2MB) | `400` | `"Ukuran file maksimal 2MB."` |
+**Contoh Response Error:**
+```json
+{ "error": "Order tidak ditemukan" } // 404
+{ "error": "Unauthorized" }          // 401
+{ "error": "Forbidden" }             // 403
+```
 
 ---
 
-### Endpoint 2 — Admin Verifikasi Pembayaran
+### Endpoint 34 — PATCH /api/admin/orders/:id/status
 
-```
-PATCH /api/admin/payments/:id/verify
-Authorization: Bearer <token-admin>
-Content-Type: application/json
-```
+**Deskripsi:** Mengubah status order secara manual. Transisi status harus mengikuti alur yang valid (lihat aturan validasi di bawah).
 
-**Request Body**
+**Path Parameter:**
+- `id` (number, wajib) — ID order
+
+**Request Body:**
 ```json
 {
-  "notes": "Pembayaran sudah masuk Rp 150.000"
+  "status": "IN_QUEUE"
+}
+```
+
+**Aturan Transisi Status yang Valid:**
+
+Implementor wajib memvalidasi bahwa transisi status hanya boleh maju satu langkah dalam alur berikut, dan tidak boleh melompat atau mundur:
+
+```
+PAID → IN_QUEUE → IN_PRODUCTION → DONE → SHIPPED → COMPLETED
+```
+
+Status `PENDING_PAYMENT` dan `CANCELLED` tidak bisa diubah oleh endpoint ini. Hanya status di atas yang boleh menjadi target transisi.
+
+Contoh: Jika status saat ini `PAID`, maka `status` baru yang diterima hanya `IN_QUEUE`. Selain itu, kembalikan error 400.
+
+**Contoh Request:**
+```
+PATCH /api/admin/orders/1/status
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{ "status": "IN_QUEUE" }
+```
+
+**Contoh Response Sukses (200 OK):**
+```json
+{
+  "data": {
+    "id": 1,
+    "status": "IN_QUEUE",
+    "updated_at": "2025-06-02T08:00:00.000Z"
+  }
+}
+```
+
+**Contoh Response Error:**
+```json
+{ "error": "Order tidak ditemukan" }         // 404
+{ "error": "Transisi status tidak valid" }   // 400 - melanggar aturan transisi
+{ "error": "Status wajib diisi" }            // 400 - body kosong
+```
+
+---
+
+### Endpoint 35 — PATCH /api/admin/orders/:id/shipping
+
+**Deskripsi:** Admin menginput nomor resi pengiriman dan nama kurir. Endpoint ini hanya bisa dipanggil ketika status order adalah `SHIPPED` atau `DONE` (barang sudah siap atau sedang dikirim).
+
+**Path Parameter:**
+- `id` (number, wajib) — ID order
+
+**Request Body:**
+```json
+{
+  "shipping_tracking_number": "JNE123456789",
+  "shipping_courier": "JNE"
 }
 ```
 
 | Field | Tipe | Wajib | Keterangan |
-|---|---|---|---|
-| `notes` | String | ❌ | Catatan admin, opsional, maks 255 karakter |
+| :---- | :--- | :---- | :--------- |
+| `shipping_tracking_number` | string | Ya | Nomor resi dari jasa ekspedisi |
+| `shipping_courier` | string | Ya | Nama kurir (JNE, J&T, Sicepat, dll) |
 
-**Response — Sukses `200 OK`**
-```json
+**Contoh Request:**
+```
+PATCH /api/admin/orders/1/shipping
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
 {
-  "data": "Pembayaran berhasil diverifikasi."
+  "shipping_tracking_number": "JNE123456789",
+  "shipping_courier": "JNE"
 }
 ```
 
-**Response — Error**
+**Contoh Response Sukses (200 OK):**
+```json
+{
+  "data": {
+    "id": 1,
+    "shipping_tracking_number": "JNE123456789",
+    "shipping_courier": "JNE",
+    "updated_at": "2025-06-03T09:00:00.000Z"
+  }
+}
+```
 
-| Kondisi | HTTP | Pesan |
-|---|---|---|
-| Token tidak valid / bukan admin | `401` | `"Unauthorized"` |
-| Payment tidak ditemukan | `404` | `"Data pembayaran tidak ditemukan."` |
-| Payment bukan status `PENDING` | `400` | `"Pembayaran ini sudah diproses sebelumnya."` |
+**Contoh Response Error:**
+```json
+{ "error": "Order tidak ditemukan" }                         // 404
+{ "error": "Nomor resi wajib diisi" }                        // 400
+{ "error": "Kurir wajib diisi" }                             // 400
+{ "error": "Resi hanya bisa diinput pada status DONE atau SHIPPED" } // 400
+```
 
 ---
 
-### Endpoint 3 — Admin Tolak Pembayaran
+### Endpoint 36 — PATCH /api/admin/orders/:id/estimation
 
-```
-PATCH /api/admin/payments/:id/reject
-Authorization: Bearer <token-admin>
-Content-Type: application/json
-```
+**Deskripsi:** Admin meng-override estimasi tanggal selesai produksi secara manual. Berguna jika ada kendala produksi atau percepatan. Hanya berlaku jika status order masih dalam proses produksi (`IN_QUEUE` atau `IN_PRODUCTION`).
 
-**Request Body**
+**Path Parameter:**
+- `id` (number, wajib) — ID order
+
+**Request Body:**
 ```json
 {
-  "reason": "Nominal transfer kurang, seharusnya Rp 150.000"
+  "estimated_completion_date": "2025-06-10"
 }
 ```
 
 | Field | Tipe | Wajib | Keterangan |
-|---|---|---|---|
-| `reason` | String | ✅ | Alasan penolakan, wajib diisi, maks 255 karakter |
+| :---- | :--- | :---- | :--------- |
+| `estimated_completion_date` | string (format: `YYYY-MM-DD`) | Ya | Tanggal estimasi selesai produksi |
 
-**Response — Sukses `200 OK`**
+**Aturan Validasi:**
+- Tanggal tidak boleh di masa lalu (harus >= hari ini)
+- Format harus `YYYY-MM-DD`
+- Status order harus `IN_QUEUE` atau `IN_PRODUCTION`
+
+**Contoh Request:**
+```
+PATCH /api/admin/orders/1/estimation
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{ "estimated_completion_date": "2025-06-10" }
+```
+
+**Contoh Response Sukses (200 OK):**
 ```json
 {
-  "data": "Pembayaran ditolak."
+  "data": {
+    "id": 1,
+    "estimated_completion_date": "2025-06-10",
+    "updated_at": "2025-06-02T08:30:00.000Z"
+  }
 }
 ```
 
-**Response — Error**
-
-| Kondisi | HTTP | Pesan |
-|---|---|---|
-| Token tidak valid / bukan admin | `401` | `"Unauthorized"` |
-| Payment tidak ditemukan | `404` | `"Data pembayaran tidak ditemukan."` |
-| Payment bukan status `PENDING` | `400` | `"Pembayaran ini sudah diproses sebelumnya."` |
-| `reason` tidak dikirim | `400` | `"Alasan penolakan wajib diisi."` |
-
----
-
-## 3. Struktur Folder & Penempatan File
-
-File baru yang perlu dibuat (✨), file yang perlu dimodifikasi (✏️):
-
-```
-backend/
-├── src/
-│   ├── controller/
-│   │   ├── payment-controller.js        ✨ Customer: upload bukti bayar
-│   │   └── payment-admin-controller.js  ✨ Admin: verify & reject
-│   │
-│   ├── services/
-│   │   ├── payment-service.js           ✨ Logika upload customer
-│   │   └── payment-admin-service.js     ✨ Logika verify & reject admin
-│   │
-│   ├── validation/
-│   │   └── payment-validation.js        ✨ Semua schema Zod untuk payment
-│   │
-│   ├── middleware/
-│   │   └── upload-middleware.js         ✏️ Tambah config upload untuk bukti bayar
-│   │
-│   └── routes/
-│       ├── api.js                       ✏️ Tambah POST /api/orders/:orderId/payment
-│       └── admin-api.js                 ✏️ Tambah PATCH verify & reject
-│
-└── tests/
-    ├── payment.test.js                  ✨ Test endpoint customer
-    └── payment-admin.test.js            ✨ Test endpoint admin
+**Contoh Response Error:**
+```json
+{ "error": "Order tidak ditemukan" }                                             // 404
+{ "error": "Estimasi tanggal wajib diisi" }                                      // 400
+{ "error": "Format tanggal tidak valid, gunakan format YYYY-MM-DD" }             // 400
+{ "error": "Estimasi tidak boleh di masa lalu" }                                 // 400
+{ "error": "Estimasi hanya bisa diubah pada status IN_QUEUE atau IN_PRODUCTION" } // 400
 ```
 
 ---
 
-## 4. Step-by-Step Implementasi
+## 3. Step-by-Step Implementasi
 
-### Step 1 — Buat Validation Schema (`src/validation/payment-validation.js`)
+> Kerjakan secara berurutan. Setiap langkah bergantung pada langkah sebelumnya.
 
-Buat file baru `src/validation/payment-validation.js`. Buat dan export 2 schema Zod:
+### Langkah 1 — Buat file validasi Zod
+
+**File:** `backend/src/validation/admin-order-validation.js`
+
+Buat file baru berisi skema Zod untuk memvalidasi input dari setiap endpoint. Ikuti konvensi penamaan `[aksi][Domain]Validation`.
 
 ```js
-// Schema untuk admin verify — notes opsional
-export const verifyPaymentValidation = z.object({
-  notes: z.string().max(255, "Catatan maksimal 255 karakter.").optional(),
-});
+// Contoh struktur file
+import { z } from 'zod';
 
-// Schema untuk admin reject — reason wajib
-export const rejectPaymentValidation = z.object({
-  reason: z.string({
-    required_error: "Alasan penolakan wajib diisi.",
-  }).min(1, "Alasan penolakan wajib diisi.").max(255, "Alasan maksimal 255 karakter."),
-});
+// Validasi untuk filter list order (query params)
+export const getAdminOrdersValidation = z.object({ ... });
+
+// Validasi untuk update status
+export const updateOrderStatusValidation = z.object({ ... });
+
+// Validasi untuk input info pengiriman
+export const updateOrderShippingValidation = z.object({ ... });
+
+// Validasi untuk override estimasi
+export const updateOrderEstimationValidation = z.object({ ... });
 ```
 
-> **Catatan**: Validasi file upload tidak dilakukan via Zod — ditangani di middleware upload (Step 2).
+Detail isi masing-masing skema:
+
+**`getAdminOrdersValidation`:**
+- `status`: string, opsional. Jika diisi, harus salah satu dari enum: `PENDING_PAYMENT`, `PAID`, `IN_QUEUE`, `IN_PRODUCTION`, `DONE`, `SHIPPED`, `COMPLETED`, `CANCELLED`. Pesan error: `"Status tidak valid"`
+- `page`: number (dicoerce dari string), opsional, min 1, default 1. Pesan error: `"Halaman minimal 1"`
+- `size`: number (dicoerce dari string), opsional, min 1, max 100, default 10. Pesan error: `"Ukuran halaman minimal 1"`, `"Ukuran halaman maksimal 100"`
+
+**`updateOrderStatusValidation`:**
+- `status`: string, wajib. Harus salah satu dari: `IN_QUEUE`, `IN_PRODUCTION`, `DONE`, `SHIPPED`, `COMPLETED`. Pesan error: `"Status wajib diisi"`, `"Status tidak valid"`
+
+**`updateOrderShippingValidation`:**
+- `shipping_tracking_number`: string, wajib, min 3 karakter. Pesan error: `"Nomor resi wajib diisi"`, `"Nomor resi minimal 3 karakter"`
+- `shipping_courier`: string, wajib, min 2 karakter. Pesan error: `"Kurir wajib diisi"`, `"Nama kurir minimal 2 karakter"`
+
+**`updateOrderEstimationValidation`:**
+- `estimated_completion_date`: string, wajib, format `YYYY-MM-DD` (validasi dengan regex `^\d{4}-\d{2}-\d{2}$`). Pesan error: `"Estimasi tanggal wajib diisi"`, `"Format tanggal tidak valid, gunakan format YYYY-MM-DD"`
 
 ---
 
-### Step 2 — Update Upload Middleware (`src/middleware/upload-middleware.js`)
+### Langkah 2 — Buat file service
 
-Buka file `upload-middleware.js` yang sudah ada. Tambahkan konfigurasi khusus untuk bukti pembayaran:
+**File:** `backend/src/services/admin-order-service.js`
 
-- Buat fungsi/middleware baru bernama `uploadPaymentProof`
-- Konfigurasi:
-  - Hanya terima file dengan `mimetype`: `image/jpeg`, `image/png`, `image/webp`
-  - Batas ukuran file: **2MB** (`2 * 1024 * 1024` bytes)
-  - Jika file bukan gambar → lempar error dengan pesan `"File harus berupa gambar (jpg, png, webp)."`
-  - Jika file terlalu besar → lempar error dengan pesan `"Ukuran file maksimal 2MB."`
-  - Upload ke Cloudinary folder: `utique/payments`
-  - Field name yang diterima: `proof_image`
-- Export `uploadPaymentProof` dari file ini
+Buat file baru berisi semua logika bisnis untuk manajemen order admin. Semua interaksi dengan database via Prisma **hanya boleh ada di file service ini**, bukan di controller.
+
+Buat 5 fungsi berikut:
+
+**Fungsi 1: `getAllOrders(query)`**
+- Panggil `getAdminOrdersValidation.parse(query)` untuk validasi
+- Hitung `skip = (page - 1) * size`
+- Buat objek `where` dari Prisma: jika `status` ada di query, tambahkan `where.status = status`
+- Panggil `prisma.$transaction([prisma.order.findMany(...), prisma.order.count(...)])` secara paralel untuk efisiensi
+- `findMany` harus menyertakan relasi: `include: { user: { select: { id, name, email, phone } } }`
+- `findMany` harus menggunakan `orderBy: { created_at: 'desc' }` agar order terbaru tampil duluan
+- Return data beserta objek `paging: { page, total_item, total_page: Math.ceil(total / size) }`
+
+**Fungsi 2: `getOrderById(id)`**
+- Parse `id` ke integer: `const orderId = parseInt(id)`
+- Cari order dengan `prisma.order.findUnique({ where: { id: orderId }, include: { ... } })`
+- `include` harus menyertakan: `user` (select: id, name, email, phone), `address` (semua field), `items` (semua field dari `OrderItem`), `payment` (semua field)
+- Jika order tidak ditemukan (`!order`), lempar `new ResponseError(404, 'Order tidak ditemukan')`
+- Return data order
+
+**Fungsi 3: `updateOrderStatus(id, body)`**
+- Parse `id` ke integer
+- Cari order yang ada dengan `prisma.order.findUnique({ where: { id: orderId } })`
+- Jika tidak ada, lempar `ResponseError(404, 'Order tidak ditemukan')`
+- Validasi body dengan `updateOrderStatusValidation.parse(body)`
+- **Validasi transisi status:** Definisikan peta transisi yang valid:
+  ```js
+  const validTransitions = {
+    PAID: 'IN_QUEUE',
+    IN_QUEUE: 'IN_PRODUCTION',
+    IN_PRODUCTION: 'DONE',
+    DONE: 'SHIPPED',
+    SHIPPED: 'COMPLETED',
+  };
+  ```
+  Cek apakah `validTransitions[order.status] === body.status`. Jika tidak, lempar `ResponseError(400, 'Transisi status tidak valid')`
+- Update order: `prisma.order.update({ where: { id: orderId }, data: { status: body.status } })`
+- Return hasil update (select field: id, status, updated_at)
+
+**Fungsi 4: `updateOrderShipping(id, body)`**
+- Parse `id` ke integer
+- Cari order yang ada
+- Jika tidak ada, lempar `ResponseError(404, 'Order tidak ditemukan')`
+- Validasi body dengan `updateOrderShippingValidation.parse(body)`
+- **Validasi status:** Status order harus `DONE` atau `SHIPPED`. Jika tidak, lempar `ResponseError(400, 'Resi hanya bisa diinput pada status DONE atau SHIPPED')`
+- Update order: `prisma.order.update({ where: { id: orderId }, data: { shipping_tracking_number, shipping_courier } })`
+- Return hasil update (select field: id, shipping_tracking_number, shipping_courier, updated_at)
+
+**Fungsi 5: `updateOrderEstimation(id, body)`**
+- Parse `id` ke integer
+- Cari order yang ada
+- Jika tidak ada, lempar `ResponseError(404, 'Order tidak ditemukan')`
+- Validasi body dengan `updateOrderEstimationValidation.parse(body)`
+- **Validasi tanggal tidak di masa lalu:**
+  ```js
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const inputDate = new Date(body.estimated_completion_date);
+  if (inputDate < today) throw new ResponseError(400, 'Estimasi tidak boleh di masa lalu');
+  ```
+- **Validasi status:** Status order harus `IN_QUEUE` atau `IN_PRODUCTION`. Jika tidak, lempar `ResponseError(400, 'Estimasi hanya bisa diubah pada status IN_QUEUE atau IN_PRODUCTION')`
+- Update order dengan `prisma.order.update(...)`, simpan `estimated_completion_date` sebagai objek `Date` baru: `new Date(body.estimated_completion_date)`
+- Return hasil update (select field: id, estimated_completion_date, updated_at)
 
 ---
 
-### Step 3 — Buat Payment Service (`src/services/payment-service.js`)
+### Langkah 3 — Buat file controller
 
-Buat file baru `src/services/payment-service.js`. Buat dan export satu fungsi async `uploadProof(userId, orderId, file)`.
+**File:** `backend/src/controller/admin-order-controller.js`
 
-Lakukan langkah berikut secara berurutan:
-
-**3a. Validasi file**
-- Jika `file` tidak ada / undefined → lempar `ResponseError(400, "Bukti pembayaran wajib diupload.")`
-
-**3b. Validasi order**
-- Query `Order` dengan kondisi `id = orderId AND userId = userId`
-- Jika tidak ditemukan → lempar `ResponseError(404, "Pesanan tidak ditemukan.")`
-- Jika `order.status !== "PENDING_PAYMENT"` → lempar `ResponseError(400, "Pesanan ini tidak menunggu pembayaran.")`
-- Jika `new Date() > order.paymentDeadline` → lempar `ResponseError(400, "Batas waktu pembayaran sudah habis.")`
-
-**3c. Cek duplikasi payment**
-- Query `Payment` dengan kondisi:
-  ```
-  orderId = orderId AND status IN ["PENDING", "VERIFIED"]
-  ```
-- Jika sudah ada → lempar `ResponseError(400, "Bukti pembayaran sudah pernah diupload.")`
-- **Penjelasan logika**: Payment berstatus `REJECTED` boleh ada — artinya customer boleh upload ulang setelah ditolak. Yang tidak boleh adalah upload baru kalau sudah ada yang `PENDING` (menunggu review admin) atau `VERIFIED` (sudah lunas).
-
-**3d. Ambil URL dari hasil upload Cloudinary**
-- Middleware upload di Step 2 sudah menjalankan upload ke Cloudinary sebelum fungsi ini dipanggil
-- URL hasil upload tersedia di `file.path` atau `file.secure_url` (tergantung konfigurasi middleware yang ada)
-- Simpan URL ini sebagai `proofImageUrl`
-
-**3e. Buat record Payment**
-- Buat `Payment` baru di database:
-  ```
-  orderId: orderId
-  proofImageUrl: proofImageUrl
-  status: "PENDING"
-  ```
-- Return data payment yang baru dibuat (id, orderId, proofImageUrl, status, createdAt)
-
----
-
-### Step 4 — Buat Payment Admin Service (`src/services/payment-admin-service.js`)
-
-Buat file baru `src/services/payment-admin-service.js`. Buat dan export 2 fungsi async:
-
-#### Fungsi `verify(paymentId, request)`
-
-**4a. Validasi input**
-- Validasi `request` menggunakan `verifyPaymentValidation`
-
-**4b. Cek payment**
-- Query `Payment` dengan kondisi `id = paymentId`, sertakan relasi `order`
-- Jika tidak ditemukan → lempar `ResponseError(404, "Data pembayaran tidak ditemukan.")`
-- Jika `payment.status !== "PENDING"` → lempar `ResponseError(400, "Pembayaran ini sudah diproses sebelumnya.")`
-
-**4c. Jalankan transaksi**
-- Gunakan `prisma.$transaction()` untuk 2 operasi berikut sekaligus:
-  1. Update `Payment`:
-     ```
-     status: "VERIFIED"
-     notes: request.notes (boleh null)
-     verifiedAt: new Date()
-     ```
-  2. Update `Order` (gunakan `payment.orderId`):
-     ```
-     status: "PAID"
-     ```
-- Return string `"Pembayaran berhasil diverifikasi."`
-
-#### Fungsi `reject(paymentId, request)`
-
-**4a. Validasi input**
-- Validasi `request` menggunakan `rejectPaymentValidation`
-
-**4b. Cek payment**
-- Query `Payment` dengan kondisi `id = paymentId`
-- Jika tidak ditemukan → lempar `ResponseError(404, "Data pembayaran tidak ditemukan.")`
-- Jika `payment.status !== "PENDING"` → lempar `ResponseError(400, "Pembayaran ini sudah diproses sebelumnya.")`
-
-**4c. Update Payment**
-- Update `Payment`:
-  ```
-  status: "REJECTED"
-  rejectionReason: request.reason
-  ```
-- **Penting**: Order status **tidak diubah** — tetap `PENDING_PAYMENT` agar customer bisa upload ulang bukti baru
-- Return string `"Pembayaran ditolak."`
-
----
-
-### Step 5 — Buat Payment Controller (`src/controller/payment-controller.js`)
-
-Buat file baru `src/controller/payment-controller.js`. Buat dan export satu fungsi async `upload(req, res, next)`:
+Buat file baru berisi handler HTTP untuk setiap endpoint. Controller hanya bertugas menerima request, memanggil service, dan mengembalikan response. Tidak ada logika bisnis di sini.
 
 ```js
-const upload = async (req, res, next) => {
+import * as adminOrderService from '../services/admin-order-service.js';
+
+// Handler untuk GET /api/admin/orders
+export const getAll = async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    const orderId = req.params.orderId;
-    const file = req.file; // tersedia setelah melewati uploadPaymentProof middleware
-    const result = await paymentService.uploadProof(userId, orderId, file);
-    res.status(201).json({ data: result });
+    const result = await adminOrderService.getAllOrders(req.query);
+    res.status(200).json(result); // result sudah berisi { data, paging }
   } catch (e) {
     next(e);
   }
 };
-```
 
----
-
-### Step 6 — Buat Payment Admin Controller (`src/controller/payment-admin-controller.js`)
-
-Buat file baru `src/controller/payment-admin-controller.js`. Buat dan export 2 fungsi async:
-
-```js
-const verify = async (req, res, next) => {
+// Handler untuk GET /api/admin/orders/:id
+export const getById = async (req, res, next) => {
   try {
-    const paymentId = req.params.id;
-    const result = await paymentAdminService.verify(paymentId, req.body);
+    const result = await adminOrderService.getOrderById(req.params.id);
     res.status(200).json({ data: result });
   } catch (e) {
     next(e);
   }
 };
 
-const reject = async (req, res, next) => {
+// Handler untuk PATCH /api/admin/orders/:id/status
+export const updateStatus = async (req, res, next) => {
   try {
-    const paymentId = req.params.id;
-    const result = await paymentAdminService.reject(paymentId, req.body);
+    const result = await adminOrderService.updateOrderStatus(req.params.id, req.body);
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+};
+
+// Handler untuk PATCH /api/admin/orders/:id/shipping
+export const updateShipping = async (req, res, next) => {
+  try {
+    const result = await adminOrderService.updateOrderShipping(req.params.id, req.body);
+    res.status(200).json({ data: result });
+  } catch (e) {
+    next(e);
+  }
+};
+
+// Handler untuk PATCH /api/admin/orders/:id/estimation
+export const updateEstimation = async (req, res, next) => {
+  try {
+    const result = await adminOrderService.updateOrderEstimation(req.params.id, req.body);
     res.status(200).json({ data: result });
   } catch (e) {
     next(e);
@@ -355,186 +507,131 @@ const reject = async (req, res, next) => {
 
 ---
 
-### Step 7 — Daftarkan Route
+### Langkah 4 — Daftarkan route di admin router
 
-**Di `src/routes/api.js`** — tambahkan route customer:
+**File:** `backend/src/routes/admin-api.js` (atau nama file admin router yang sudah ada)
 
-```js
-import paymentController from '../controller/payment-controller.js';
-import { uploadPaymentProof } from '../middleware/upload-middleware.js';
-
-// Payment Routes
-apiRouter.post(
-  '/api/orders/:orderId/payment',
-  uploadPaymentProof,           // ← middleware upload HARUS sebelum controller
-  paymentController.upload
-);
-```
-
-> **Penting**: `uploadPaymentProof` middleware harus diletakkan **sebelum** controller. Middleware ini yang menangani parsing `multipart/form-data` dan upload ke Cloudinary. Setelah middleware selesai, hasil upload tersedia di `req.file` untuk diakses oleh controller.
-
-**Di `src/routes/admin-api.js`** — tambahkan route admin:
+Tambahkan import controller dan daftarkan 5 route baru di bawah route yang sudah ada. Jangan hapus atau ubah route yang sudah ada.
 
 ```js
-import paymentAdminController from '../controller/payment-admin-controller.js';
+import * as adminOrderController from '../controller/admin-order-controller.js';
 
-// Payment Admin Routes
-adminRouter.patch('/api/admin/payments/:id/verify', paymentAdminController.verify);
-adminRouter.patch('/api/admin/payments/:id/reject', paymentAdminController.reject);
+// Tambahkan baris berikut di dalam definisi adminRouter
+adminRouter.get('/admin/orders', adminOrderController.getAll);
+adminRouter.get('/admin/orders/:id', adminOrderController.getById);
+adminRouter.patch('/admin/orders/:id/status', adminOrderController.updateStatus);
+adminRouter.patch('/admin/orders/:id/shipping', adminOrderController.updateShipping);
+adminRouter.patch('/admin/orders/:id/estimation', adminOrderController.updateEstimation);
+```
+
+> **Catatan penting urutan route:** Pastikan route dengan path statis (misalnya `/admin/orders/something-static`) didaftarkan **sebelum** route dengan parameter dinamis `/admin/orders/:id` untuk menghindari konflik routing. Dalam kasus ini tidak ada konflik karena semua sub-path di bawah `:id` berbeda (`/status`, `/shipping`, `/estimation`).
+
+---
+
+### Langkah 5 — Buat unit test
+
+**File:** `backend/tests/admin-order.test.js`
+
+Buat file test baru menggunakan framework testing yang sudah dipakai di project (sesuaikan dengan yang ada, misalnya Jest atau Bun test). Buat minimal satu test case per skenario berikut:
+
+**Test untuk GET /api/admin/orders:**
+- [ ] Berhasil mengambil semua order tanpa filter (response 200, data adalah array, ada field `paging`)
+- [ ] Berhasil filter berdasarkan `status=PAID` (semua item di `data` memiliki status `PAID`)
+- [ ] Gagal jika `status` bukan nilai yang valid (response 400)
+- [ ] Gagal jika tidak ada token (response 401)
+- [ ] Gagal jika token bukan admin (response 403)
+
+**Test untuk GET /api/admin/orders/:id:**
+- [ ] Berhasil mengambil detail order yang ada (response 200, ada field `items`, `payment`, `address`, `user`)
+- [ ] Gagal jika `id` tidak ada di database (response 404, pesan `"Order tidak ditemukan"`)
+
+**Test untuk PATCH /api/admin/orders/:id/status:**
+- [ ] Berhasil mengubah status dari `PAID` ke `IN_QUEUE` (response 200)
+- [ ] Gagal jika transisi tidak valid, misalnya dari `PAID` langsung ke `SHIPPED` (response 400, pesan `"Transisi status tidak valid"`)
+- [ ] Gagal jika body kosong / `status` tidak diisi (response 400)
+
+**Test untuk PATCH /api/admin/orders/:id/shipping:**
+- [ ] Berhasil menginput resi ketika status order `DONE` (response 200)
+- [ ] Gagal jika status order bukan `DONE` atau `SHIPPED` (response 400)
+- [ ] Gagal jika `shipping_tracking_number` tidak diisi (response 400)
+
+**Test untuk PATCH /api/admin/orders/:id/estimation:**
+- [ ] Berhasil mengubah estimasi ketika status `IN_QUEUE` (response 200)
+- [ ] Gagal jika tanggal di masa lalu (response 400, pesan `"Estimasi tidak boleh di masa lalu"`)
+- [ ] Gagal jika format tanggal salah, misalnya `"10-06-2025"` (response 400)
+- [ ] Gagal jika status bukan `IN_QUEUE` atau `IN_PRODUCTION` (response 400)
+
+---
+
+### Langkah 6 — Update dokumentasi manual test
+
+**File:** `manual-test-api.md`
+
+Tambahkan seksi baru di bagian paling bawah file dengan format yang sudah ada:
+
+```markdown
+## Tahap 8: Manajemen Order Admin
+
+### List Semua Order (Admin)
+- **URL:** `GET http://localhost:5000/api/admin/orders`
+- **Headers:** `Authorization: Bearer <admin_token>`
+- **Query Params:** `?status=PAID&page=1&size=10`
+...
+```
+
+Isi selengkapnya mengikuti format seksi lain di file tersebut (URL, Headers, Body, Response Sukses, Response Error untuk setiap endpoint).
+
+---
+
+### Langkah 7 — Update CONTEXT.md
+
+**File:** `CONTEXT.md`
+
+Di bagian **"7. Status Progress API" > "Tahap 8"**, ubah semua checkbox endpoint yang sudah diimplementasi dari `[ ]` menjadi `[x]`:
+
+```markdown
+### Tahap 8 — Manajemen Order Admin
+
+32. [x] `GET /api/admin/orders` — Mengambil semua order (filter status)
+33. [x] `GET /api/admin/orders/:id` — Mengambil detail order
+34. [x] `PATCH /api/admin/orders/:id/status` — Mengubah status order
+35. [x] `PATCH /api/admin/orders/:id/shipping` — Input info pengiriman (resi, kurir)
+36. [x] `PATCH /api/admin/orders/:id/estimation` — Override estimasi pembuatan
 ```
 
 ---
 
-### Step 8 — Buat Unit Test Customer (`tests/payment.test.js`)
+## 4. Acceptance Criteria
 
-Buat file baru `tests/payment.test.js`. Gunakan integration test dengan `supertest`.
+### Fungsionalitas
 
-**Setup & Teardown**
+- [ ] `GET /api/admin/orders` mengembalikan semua order dengan struktur `{ data: [...], paging: {...} }`
+- [ ] `GET /api/admin/orders` dengan query `?status=PAID` hanya mengembalikan order dengan status `PAID`
+- [ ] `GET /api/admin/orders` dengan query `?status=INVALID` mengembalikan 400 dengan pesan error
+- [ ] `GET /api/admin/orders` mengembalikan data `user` (id, name, email, phone) di setiap item
+- [ ] `GET /api/admin/orders/:id` mengembalikan detail order dengan relasi `user`, `address`, `items`, dan `payment`
+- [ ] `GET /api/admin/orders/:id` dengan ID yang tidak ada mengembalikan 404
+- [ ] `PATCH /api/admin/orders/:id/status` berhasil mengubah status jika transisi valid
+- [ ] `PATCH /api/admin/orders/:id/status` mengembalikan 400 jika transisi tidak valid (misalnya `PAID` → `SHIPPED`)
+- [ ] `PATCH /api/admin/orders/:id/shipping` berhasil menyimpan resi dan kurir jika status `DONE` atau `SHIPPED`
+- [ ] `PATCH /api/admin/orders/:id/shipping` mengembalikan 400 jika status bukan `DONE` atau `SHIPPED`
+- [ ] `PATCH /api/admin/orders/:id/estimation` berhasil menyimpan estimasi jika status `IN_QUEUE` atau `IN_PRODUCTION` dan tanggal valid
+- [ ] `PATCH /api/admin/orders/:id/estimation` mengembalikan 400 jika tanggal di masa lalu
+- [ ] `PATCH /api/admin/orders/:id/estimation` mengembalikan 400 jika format tanggal bukan `YYYY-MM-DD`
 
-- `beforeEach`:
-  1. Buat user test via `createTestUser()`
-  2. Buat product, variant, flavor, size via helper yang sudah ada
-  3. Buat cart + cart item
-  4. Buat address test
-  5. Buat order dulu via `POST /api/orders` agar punya `orderId` valid dengan status `PENDING_PAYMENT`
-  6. Simpan `orderId` dari response untuk dipakai di test
+### Keamanan & Auth
 
-- `afterEach`: Hapus semua data test (payment, order, cart, product, address, user) dalam urutan yang benar mengikuti foreign key
+- [ ] Semua endpoint mengembalikan 401 jika tidak ada header `Authorization`
+- [ ] Semua endpoint mengembalikan 403 jika token valid tetapi bukan admin (role `CUSTOMER`)
 
-**Test Cases yang wajib dibuat:**
+### Kualitas Kode
 
-```
-✅ Berhasil upload bukti pembayaran
-   - Kirim multipart/form-data dengan file gambar valid (gunakan buffer/fixture image kecil)
-   - Cek response status 201
-   - Cek response body memiliki: id, orderId, proofImageUrl, status: "PENDING"
-   - proofImageUrl harus berupa string URL yang valid
+- [ ] Tidak ada logika bisnis atau query Prisma di file controller
+- [ ] Semua validasi Zod menggunakan pesan error Bahasa Indonesia
+- [ ] Semua fungsi di service dan controller memiliki komentar dokumentasi dalam Bahasa Indonesia
+- [ ] Semua unit test berjalan dan lulus (`npm test` atau `bun test`)
 
-✅ Gagal jika tidak ada token (401)
+### Dokumentasi
 
-✅ Gagal jika orderId bukan milik user yang login (404)
-
-✅ Gagal jika order bukan status PENDING_PAYMENT (400)
-   - Update status order ke "PAID" langsung via Prisma, lalu coba upload
-   - Expect response 400
-
-✅ Gagal jika order sudah melewati payment_deadline (400)
-   - Update paymentDeadline ke masa lalu langsung via Prisma, lalu coba upload
-   - Expect response 400
-
-✅ Gagal jika sudah ada payment PENDING untuk order yang sama (400)
-   - Upload pertama berhasil (status 201)
-   - Upload kedua dengan file yang sama harus gagal dengan status 400
-
-✅ Gagal jika tidak ada file yang dikirim (400)
-   - Kirim request tanpa field proof_image
-   - Expect response 400
-```
-
----
-
-### Step 9 — Buat Unit Test Admin (`tests/payment-admin.test.js`)
-
-Buat file baru `tests/payment-admin.test.js`.
-
-**Setup & Teardown**
-
-- `beforeEach`:
-  1. Buat user + admin test
-  2. Buat order dengan status `PENDING_PAYMENT` (buat langsung via Prisma, tidak perlu lewat API)
-  3. Buat payment dengan status `PENDING` langsung via Prisma (tidak perlu lewat API upload)
-  4. Simpan `paymentId` untuk dipakai di test
-
-- `afterEach`: Hapus semua data test
-
-**Test Cases yang wajib dibuat:**
-
-```
-✅ Admin berhasil verifikasi pembayaran
-   - Kirim PATCH dengan body kosong (notes opsional)
-   - Cek response status 200
-   - Cek response data = "Pembayaran berhasil diverifikasi."
-   - Query DB: cek Payment.status = "VERIFIED"
-   - Query DB: cek Order.status = "PAID"
-
-✅ Admin berhasil verifikasi dengan notes
-   - Kirim PATCH dengan body { notes: "Transfer sudah masuk" }
-   - Cek response status 200
-   - Query DB: cek Payment.notes tersimpan
-
-✅ Gagal verifikasi jika bukan admin (401)
-   - Gunakan token customer biasa
-
-✅ Gagal verifikasi jika paymentId tidak ditemukan (404)
-   - Gunakan ID yang tidak ada, misal "nonexistent-id"
-
-✅ Gagal verifikasi jika payment bukan status PENDING (400)
-   - Update payment status ke "VERIFIED" via Prisma, lalu coba verifikasi lagi
-   - Expect response 400
-
-✅ Admin berhasil menolak pembayaran
-   - Kirim PATCH dengan body { reason: "Nominal kurang" }
-   - Cek response status 200
-   - Cek response data = "Pembayaran ditolak."
-   - Query DB: cek Payment.status = "REJECTED"
-   - Query DB: cek Order.status TETAP "PENDING_PAYMENT" (tidak berubah)
-
-✅ Gagal reject jika reason tidak dikirim (400)
-   - Kirim PATCH tanpa body / body kosong
-
-✅ Gagal reject jika payment bukan status PENDING (400)
-   - Update payment status ke "REJECTED" via Prisma, lalu coba reject lagi
-
-✅ Gagal reject jika bukan admin (401)
-```
-
----
-
-## 5. Acceptance Criteria
-
-### Fungsionalitas — Upload Bukti Bayar
-- [ ] `POST /api/orders/:orderId/payment` berhasil membuat Payment dan mengembalikan status `201`
-- [ ] Foto bukti bayar berhasil diupload ke Cloudinary folder `utique/payments`
-- [ ] URL foto tersimpan di field `Payment.proofImageUrl`
-- [ ] Payment baru selalu dibuat dengan status `PENDING`
-- [ ] Customer bisa upload ulang setelah payment sebelumnya `REJECTED`
-- [ ] Customer tidak bisa upload jika sudah ada payment `PENDING` atau `VERIFIED`
-
-### Fungsionalitas — Verifikasi Admin
-- [ ] `PATCH /api/admin/payments/:id/verify` mengubah `Payment.status` → `VERIFIED`
-- [ ] Saat diverifikasi, `Order.status` ikut berubah → `PAID` dalam satu `prisma.$transaction()`
-- [ ] Field `notes` opsional — tidak wajib diisi saat verifikasi
-- [ ] Tidak bisa verifikasi payment yang sudah `VERIFIED` atau `REJECTED`
-
-### Fungsionalitas — Penolakan Admin
-- [ ] `PATCH /api/admin/payments/:id/reject` mengubah `Payment.status` → `REJECTED`
-- [ ] Saat ditolak, `Order.status` **tidak berubah** — tetap `PENDING_PAYMENT`
-- [ ] Field `reason` wajib diisi saat menolak
-- [ ] Tidak bisa menolak payment yang sudah `VERIFIED` atau `REJECTED`
-
-### Validasi & Error Handling
-- [ ] Upload tanpa file → `400` dengan pesan Bahasa Indonesia
-- [ ] Upload file bukan gambar → `400`
-- [ ] Upload file > 2MB → `400`
-- [ ] Upload ke order bukan milik user → `404`
-- [ ] Upload ke order yang sudah lewat deadline → `400`
-- [ ] Reject tanpa `reason` → `400` dengan pesan Bahasa Indonesia
-- [ ] Semua endpoint tanpa token → `401`
-- [ ] Admin endpoint diakses dengan token customer → `401`
-
-### Keamanan & Konsistensi
-- [ ] Verify + update order status dijalankan dalam satu `prisma.$transaction()`
-- [ ] Query order selalu menyertakan `userId` (data isolation — customer tidak bisa akses order orang lain)
-- [ ] `payment_deadline` dicek dari nilai di DB, bukan dari input client
-
-### Testing
-- [ ] Semua test case di Step 8 dan Step 9 sudah dibuat
-- [ ] Semua test **lolos** (`bun test` tidak ada yang fail)
-- [ ] Order status setelah verify dan reject diverifikasi langsung dari DB (query Prisma), bukan hanya dari response API
-- [ ] Tidak ada data test yang tersisa setelah test selesai (`afterEach` bersih)
-
-### Kode
-- [ ] Setiap function memiliki komentar dokumentasi dalam Bahasa Indonesia
-- [ ] File mengikuti konvensi nama `kebab-case.js`
-- [ ] Tidak ada logika database di controller (hanya di service)
-- [ ] Error diteruskan ke `next(e)` di controller
+- [ ] `manual-test-api.md` diperbarui dengan contoh request dan response untuk semua 5 endpoint baru
+- [ ] `CONTEXT.md` diperbarui: checkbox Tahap 8 berubah dari `[ ]` menjadi `[x]`
