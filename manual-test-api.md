@@ -339,3 +339,4 @@ Dokumentasi ini berisi daftar endpoint API Utique yang disusun berdasarkan tahap
 | **401** | `Unauthorized` | Token salah/habis |
 | **403** | `Forbidden` | Bukan Admin |
 | **404** | `Not Found` | Data tidak ada |
+| **429** | `Terlalu banyak percobaan...` | Rate limit terlampaui |

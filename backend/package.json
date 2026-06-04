@@ -7,9 +7,13 @@
   "scripts": {
     "dev": "bun --watch src/index.js",
     "start": "bun src/index.js",
-    "test": "bun test"
+    "test": "cross-env NODE_ENV=test bun test"
   },
-  "keywords": ["cookies", "e-commerce", "pre-order"],
+  "keywords": [
+    "cookies",
+    "e-commerce",
+    "pre-order"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
@@ -24,6 +28,7 @@
     "helmet": "^8.1.0",
     "multer": "^2.1.1",
     "multer-storage-cloudinary": "^4.0.0",
+    "node-cron": "^4.2.1",
     "nodemailer": "^8.0.7",
     "pg": "^8.20.0",
     "uuid": "^14.0.0",
@@ -31,6 +36,7 @@
   },
   "devDependencies": {
     "@types/pg": "^8.20.0",
+    "cross-env": "^10.1.0",
     "prisma": "^7.8.0",
     "supertest": "^7.2.2"
   }

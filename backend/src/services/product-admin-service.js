@@ -99,6 +99,9 @@ const update = async (productId, request) => {
 
 /**
  * Menghapus Produk beserta seluruh Varian Terkait (Admin Only)
+ * Akan gagal jika produk masih memiliki varian yang tercatat
+ * di CartItem atau OrderItem aktif.
+ *
  * @param {Number} productId - ID produk yang akan dihapus
  * @returns {String} - Pesan sukses
  */
@@ -115,7 +118,28 @@ const remove = async (productId) => {
     throw new ResponseError(404, "Produk tidak ditemukan.");
   }
 
-  // 3. Hapus relasi (varian) dan produk secara transaksional
+  // 3. Ambil semua ID varian dari produk ini
+  const variants = await prisma.productVariant.findMany({
+    where: { productId: id },
+    select: { id: true },
+  });
+  const variantIds = variants.map((v) => v.id);
+
+  // 4. Cek apakah ada CartItem yang mereferensikan varian dari produk ini
+  const cartItemCount = await prisma.cartItem.count({
+    where: { productVariantId: { in: variantIds } },
+  });
+
+  // 5. Cek apakah ada OrderItem yang mereferensikan varian dari produk ini
+  const orderItemCount = await prisma.orderItem.count({
+    where: { productVariantId: { in: variantIds } },
+  });
+
+  if (cartItemCount > 0 || orderItemCount > 0) {
+    throw new ResponseError(400, "Produk tidak bisa dihapus karena masih terdapat dalam pesanan atau keranjang aktif.");
+  }
+
+  // 6. Hapus relasi (varian) dan produk secara transaksional
   await prisma.$transaction([
     prisma.productVariant.deleteMany({
       where: { productId: id },
@@ -216,6 +240,8 @@ const updateVariant = async (variantId, request) => {
 
 /**
  * Menghapus Varian Produk (Admin Only)
+ * Akan gagal jika varian masih ada di CartItem atau OrderItem.
+ *
  * @param {Number} variantId - ID varian produk yang akan dihapus
  * @returns {String} - Pesan sukses
  */
@@ -231,7 +257,21 @@ const removeVariant = async (variantId) => {
     throw new ResponseError(404, "Varian tidak ditemukan.");
   }
 
-  // 3. Hapus varian dari database
+  // 3. Cek apakah varian masih ada di keranjang belanja
+  const cartItemCount = await prisma.cartItem.count({
+    where: { productVariantId: id },
+  });
+
+  // 4. Cek apakah varian masih ada di pesanan manapun
+  const orderItemCount = await prisma.orderItem.count({
+    where: { productVariantId: id },
+  });
+
+  if (cartItemCount > 0 || orderItemCount > 0) {
+    throw new ResponseError(400, "Varian tidak bisa dihapus karena masih terdapat dalam pesanan atau keranjang aktif.");
+  }
+
+  // 5. Hapus varian dari database
   await prisma.productVariant.delete({
     where: { id },
   });

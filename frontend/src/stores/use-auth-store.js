@@ -4,24 +4,24 @@ import api from "../lib/api";
 // ==========================================
 // Auth Store — State management untuk autentikasi pengguna
 // Mengelola: login, register, logout, dan cek status login.
-// Token disimpan di localStorage agar persist saat refresh.
+// Token disimpan di sessionStorage agar persist saat refresh.
 // ==========================================
 const useAuthStore = create((set) => ({
   // State
   user: null,
-  token: localStorage.getItem("token") || null,
+  token: sessionStorage.getItem("token") || null,
   isLoading: false,
   error: null,
 
   // Simpan data user dan token setelah login/register berhasil
   setAuth: (user, token) => {
-    localStorage.setItem("token", token);
+    sessionStorage.setItem("token", token);
     set({ user, token, error: null });
   },
 
   // Hapus data autentikasi (logout)
   clearAuth: () => {
-    localStorage.removeItem("token");
+    sessionStorage.removeItem("token");
     set({ user: null, token: null, error: null });
   },
 
@@ -33,7 +33,7 @@ const useAuthStore = create((set) => ({
 
   // Cek apakah user sudah login (ambil profil dari API)
   fetchUser: async () => {
-    const token = localStorage.getItem("token");
+    const token = sessionStorage.getItem("token");
     if (!token) return;
 
     try {
@@ -42,7 +42,7 @@ const useAuthStore = create((set) => ({
       set({ user: response.data.data, isLoading: false });
     } catch (error) {
       // Token invalid, hapus
-      localStorage.removeItem("token");
+      sessionStorage.removeItem("token");
       set({ user: null, token: null, isLoading: false });
     }
   },

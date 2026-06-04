@@ -77,10 +77,17 @@ const login = async (request) => {
   // 4. Generate token
   const token = uuid();
 
-  // 5. Update token di database
+  // Hitung tanggal expiration token: 7 hari dari sekarang
+  const tokenExpiredAt = new Date();
+  tokenExpiredAt.setDate(tokenExpiredAt.getDate() + 7);
+
+  // 5. Update token dan expiration di database
   return prisma.user.update({
     where: { id: user.id },
-    data: { token },
+    data: {
+      token,
+      tokenExpiredAt,
+    },
     select: {
       id: true,
       name: true,
@@ -190,7 +197,10 @@ const update = async (userId, request) => {
 const logout = async (userId) => {
   await prisma.user.update({
     where: { id: userId },
-    data: { token: null },
+    data: {
+      token: null,
+      tokenExpiredAt: null,
+    },
   });
 
   return "Berhasil logout.";

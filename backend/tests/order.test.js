@@ -240,5 +240,15 @@ describe("Order API", () => {
 
       expect(result.status).toBe(404);
     });
+
+    it("should return 400 if order ID is not a number", async () => {
+      await createTestUser();
+      const user = await getTestUser();
+
+      const result = await request(web).get("/api/orders/abc").set("Authorization", `Bearer ${user.token}`);
+
+      expect(result.status).toBe(400);
+      expect(result.body.error).toBe("ID order tidak valid.");
+    });
   });
 });

@@ -1,4 +1,5 @@
 import paymentService from "../services/payment-service.js";
+import { ResponseError } from "../error/response-error.js";
 
 // ==========================================
 // Payment Controller — Handler untuk request HTTP domain Payment (Customer)
@@ -14,7 +15,10 @@ import paymentService from "../services/payment-service.js";
 const upload = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const orderId = Number(req.params.orderId);
+    const orderId = parseInt(req.params.orderId, 10);
+    if (isNaN(orderId)) {
+      throw new ResponseError(400, "ID order tidak valid.");
+    }
     const file = req.file; // Tersedia setelah melewati middleware uploadPaymentProof
     
     const result = await paymentService.uploadProof(userId, orderId, file);

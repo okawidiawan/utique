@@ -1,4 +1,5 @@
 import paymentAdminService from "../services/payment-admin-service.js";
+import { ResponseError } from "../error/response-error.js";
 
 // ==========================================
 // Payment Admin Controller — Handler untuk request HTTP domain Payment (Admin)
@@ -13,7 +14,10 @@ import paymentAdminService from "../services/payment-admin-service.js";
  */
 const verify = async (req, res, next) => {
   try {
-    const paymentId = Number(req.params.id);
+    const paymentId = parseInt(req.params.id, 10);
+    if (isNaN(paymentId)) {
+      throw new ResponseError(400, "ID pembayaran tidak valid.");
+    }
     const result = await paymentAdminService.verify(paymentId, req.body);
     res.status(200).json({
       data: result,
@@ -31,7 +35,10 @@ const verify = async (req, res, next) => {
  */
 const reject = async (req, res, next) => {
   try {
-    const paymentId = Number(req.params.id);
+    const paymentId = parseInt(req.params.id, 10);
+    if (isNaN(paymentId)) {
+      throw new ResponseError(400, "ID pembayaran tidak valid.");
+    }
     const result = await paymentAdminService.reject(paymentId, req.body);
     res.status(200).json({
       data: result,
@@ -40,6 +47,7 @@ const reject = async (req, res, next) => {
     next(e);
   }
 };
+
 
 export default {
   verify,

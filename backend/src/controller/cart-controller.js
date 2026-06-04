@@ -1,4 +1,5 @@
 import cartService from "../services/cart-service.js";
+import { ResponseError } from "../error/response-error.js";
 
 /**
  * Cart Controller — Handler untuk request HTTP domain Cart.
@@ -47,7 +48,10 @@ const addItem = async (req, res, next) => {
 const updateItem = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const cartItemId = parseInt(req.params.id);
+    const cartItemId = parseInt(req.params.id, 10);
+    if (isNaN(cartItemId)) {
+      throw new ResponseError(400, "ID item keranjang tidak valid.");
+    }
     const request = req.body;
 
     const result = await cartService.updateItem(userId, cartItemId, request);
@@ -66,7 +70,10 @@ const updateItem = async (req, res, next) => {
 const removeItem = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const cartItemId = parseInt(req.params.id);
+    const cartItemId = parseInt(req.params.id, 10);
+    if (isNaN(cartItemId)) {
+      throw new ResponseError(400, "ID item keranjang tidak valid.");
+    }
 
     const result = await cartService.removeItem(userId, cartItemId);
 

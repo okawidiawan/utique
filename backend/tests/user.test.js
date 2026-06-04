@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import request from "supertest";
 import { web } from "../src/application/web.js";
+import { prisma } from "../src/application/database.js";
 import {
   removeTestUser,
   createTestUser,
@@ -162,7 +163,27 @@ describe("User API", () => {
         .set("Authorization", "Bearer wrong-token");
 
       expect(result.status).toBe(401);
-      expect(result.body.error).toBe("Akses ditolak. Token tidak valid atau sudah expired.");
+      expect(result.body.error).toBe("Akses ditolak. Token tidak valid.");
+    });
+
+    it("should reject if token is expired", async () => {
+      await createTestUser();
+      const user = await getTestUser();
+
+      // Manipulate tokenExpiredAt in database to the past
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          tokenExpiredAt: new Date(Date.now() - 1000),
+        },
+      });
+
+      const result = await request(web)
+        .get("/api/users/current")
+        .set("Authorization", "Bearer test-token");
+
+      expect(result.status).toBe(401);
+      expect(result.body.error).toBe("Akses ditolak. Token sudah expired.");
     });
   });
 
@@ -302,7 +323,7 @@ describe("User API", () => {
         .set("Authorization", "Bearer invalid");
 
       expect(result.status).toBe(401);
-      expect(result.body.error).toBe("Akses ditolak. Token tidak valid atau sudah expired.");
+      expect(result.body.error).toBe("Akses ditolak. Token tidak valid.");
     });
 
     it("should not be able to use token after logout", async () => {
@@ -319,7 +340,7 @@ describe("User API", () => {
         .set("Authorization", "Bearer test-token");
 
       expect(result.status).toBe(401);
-      expect(result.body.error).toBe("Akses ditolak. Token tidak valid atau sudah expired.");
+      expect(result.body.error).toBe("Akses ditolak. Token tidak valid.");
     });
   });
 
@@ -410,6 +431,17 @@ describe("User API", () => {
 
         expect(result.status).toBe(404);
       });
+
+      it("should reject if address ID is not a number", async () => {
+        await createTestUser();
+        const result = await request(web)
+          .patch("/api/addresses/abc")
+          .set("Authorization", "Bearer test-token")
+          .send({ label: "Kantor" });
+
+        expect(result.status).toBe(400);
+        expect(result.body.error).toBe("ID alamat tidak valid.");
+      });
     });
 
     describe("DELETE /api/addresses/:id", () => {
@@ -424,6 +456,16 @@ describe("User API", () => {
 
         expect(result.status).toBe(200);
         expect(result.body.data).toBe("OK");
+      });
+
+      it("should reject if address ID is not a number", async () => {
+        await createTestUser();
+        const result = await request(web)
+          .delete("/api/addresses/abc")
+          .set("Authorization", "Bearer test-token");
+
+        expect(result.status).toBe(400);
+        expect(result.body.error).toBe("ID alamat tidak valid.");
       });
     });
   });

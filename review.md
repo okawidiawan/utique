@@ -35,18 +35,18 @@ Frontend saat ini masih dalam tahap **skeleton/scaffold** — semua halaman masi
 
 ### 2.1 Hal yang Sudah Baik ✅
 
-| Aspek | Keterangan |
-|:---|:---|
-| **Layered Architecture** | Konsisten diterapkan: Router → Controller → Service → Prisma. Tidak ada query database di controller, tidak ada response handling di service. |
-| **Error Handling** | `ResponseError` class + centralized `errorMiddleware` sudah benar. Semua controller menggunakan pola `try/catch` → `next(e)`. |
-| **Validasi Zod** | Setiap domain memiliki validation schema sendiri. Pesan error dalam Bahasa Indonesia konsisten. |
-| **Snapshot Pattern (OrderItem)** | Menyimpan `productName`, `flavorName`, `sizeName`, `price` di OrderItem — data historis terlindungi dari perubahan master data. |
-| **Data Isolation** | Setiap query data customer menyertakan `userId` di klausa `where`. Ini mencegah IDOR (Insecure Direct Object Reference). |
-| **Upsert Pattern (Cart & Payment)** | Cart menggunakan `upsert` untuk menghindari duplikat. Payment juga menggunakan `upsert` yang memungkinkan re-upload setelah reject. |
-| **Transaction Usage** | `$transaction` digunakan dengan benar di order creation, product deletion, dan payment verification. |
-| **Test Coverage** | 9 test file mencakup semua tahapan API (user, product, cart, order, payment, admin). Test utility (`test-util.js`) memudahkan setup/teardown. |
-| **Dokumentasi Kode** | JSDoc dan komentar Bahasa Indonesia sudah cukup lengkap di setiap function dan section. |
-| **Paginasi** | Sudah menggunakan `Promise.all` / `$transaction` untuk query data + count secara paralel sesuai konvensi CONTEXT.md. |
+| Aspek                               | Keterangan                                                                                                                                    |
+| :---------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Layered Architecture**            | Konsisten diterapkan: Router → Controller → Service → Prisma. Tidak ada query database di controller, tidak ada response handling di service. |
+| **Error Handling**                  | `ResponseError` class + centralized `errorMiddleware` sudah benar. Semua controller menggunakan pola `try/catch` → `next(e)`.                 |
+| **Validasi Zod**                    | Setiap domain memiliki validation schema sendiri. Pesan error dalam Bahasa Indonesia konsisten.                                               |
+| **Snapshot Pattern (OrderItem)**    | Menyimpan `productName`, `flavorName`, `sizeName`, `price` di OrderItem — data historis terlindungi dari perubahan master data.               |
+| **Data Isolation**                  | Setiap query data customer menyertakan `userId` di klausa `where`. Ini mencegah IDOR (Insecure Direct Object Reference).                      |
+| **Upsert Pattern (Cart & Payment)** | Cart menggunakan `upsert` untuk menghindari duplikat. Payment juga menggunakan `upsert` yang memungkinkan re-upload setelah reject.           |
+| **Transaction Usage**               | `$transaction` digunakan dengan benar di order creation, product deletion, dan payment verification.                                          |
+| **Test Coverage**                   | 9 test file mencakup semua tahapan API (user, product, cart, order, payment, admin). Test utility (`test-util.js`) memudahkan setup/teardown. |
+| **Dokumentasi Kode**                | JSDoc dan komentar Bahasa Indonesia sudah cukup lengkap di setiap function dan section.                                                       |
+| **Paginasi**                        | Sudah menggunakan `Promise.all` / `$transaction` untuk query data + count secara paralel sesuai konvensi CONTEXT.md.                          |
 
 ### 2.2 Temuan dan Rekomendasi
 
@@ -55,6 +55,7 @@ Frontend saat ini masih dalam tahap **skeleton/scaffold** — semua halaman masi
 **C-01: `parseInt()` tanpa radix dan tanpa validasi NaN di Controller**
 
 **File terdampak:**
+
 - `controller/order-controller.js:36` — `parseInt(req.params.id)`
 - `controller/user-controller.js:89, 100` — `parseInt(req.params.id)`
 - `controller/cart-controller.js:50, 69` — `parseInt(req.params.id)`
@@ -90,6 +91,7 @@ const serial = (orderCountToday + 1).toString().padStart(3, "0");
 Walaupun sudah di dalam `$transaction`, Prisma interactive transaction tidak otomatis melakukan row-level locking. Jika dua user checkout bersamaan dalam milidetik yang sama, keduanya bisa mendapatkan `count` yang sama dan menghasilkan nomor order duplikat. Karena `orderNumber` adalah `@unique`, salah satu transaksi akan gagal (Prisma unique constraint violation error), bukan `ResponseError` yang terkontrol.
 
 **Rekomendasi:**
+
 - Gunakan `$queryRaw` dengan `SELECT ... FOR UPDATE` atau
 - Gunakan sequence database (PostgreSQL `SERIAL` / `nextval`)
 - Atau tambahkan retry loop dengan catching unique constraint error
@@ -101,17 +103,15 @@ Walaupun sudah di dalam `$transaction`, Prisma interactive transaction tidak oto
 **File:** `services/product-admin-service.js:105-129`
 
 ```javascript
-await prisma.$transaction([
-  prisma.productVariant.deleteMany({ where: { productId: id } }),
-  prisma.product.delete({ where: { id } }),
-]);
+await prisma.$transaction([prisma.productVariant.deleteMany({ where: { productId: id } }), prisma.product.delete({ where: { id } })]);
 ```
 
 Jika ada `CartItem` atau `OrderItem` yang mereferensikan `ProductVariant` dari produk ini, delete akan gagal dengan **foreign key constraint error** dari database, menghasilkan error 500 yang tidak user-friendly.
 
 **Rekomendasi:**
+
 - Cek apakah ada CartItem/OrderItem yang masih mereferensikan varian produk tersebut sebelum menghapus.
-- Jika ada, tampilkan pesan error yang jelas: *"Produk tidak bisa dihapus karena masih ada dalam pesanan aktif."*
+- Jika ada, tampilkan pesan error yang jelas: _"Produk tidak bisa dihapus karena masih ada dalam pesanan aktif."_
 - Atau gunakan **soft delete** (`isAvailable = false`) sebagai gantinya.
 
 ---
@@ -191,6 +191,7 @@ set({ items: response.data.data.items || [], isLoading: false });
 Backend cart service mengembalikan array langsung (`response.data.data` sudah merupakan array), bukan objek dengan property `items`. Ini akan menyebabkan `items` selalu menjadi `[]` karena `response.data.data.items` akan `undefined`.
 
 Lalu di line 33:
+
 ```javascript
 (sum, item) => sum + item.quantity * item.productVariant.price,
 ```
@@ -204,6 +205,7 @@ Tapi backend mengembalikan field `price` di root level item, bukan `item.product
 **M-05: Tidak Ada Validasi `NaN` di `Number()` pada Controller**
 
 **File terdampak:**
+
 - `controller/payment-controller.js:17` — `Number(req.params.orderId)`
 - `controller/product-admin-controller.js:33, 51, 69, 87, 105` — `Number(req.params.id)`
 - `controller/payment-admin-controller.js:16, 35` — `Number(req.params.id)`
@@ -327,14 +329,14 @@ Backend hanya menggunakan `console.error` di `error-middleware.js`. Untuk produc
 
 ### 3.1 Hal yang Sudah Baik ✅
 
-| Aspek | Keterangan |
-|:---|:---|
-| **Monorepo Structure** | `backend/` dan `frontend/` dalam satu repo memudahkan development dan deployment coordination. |
-| **Router Separation** | Tiga router (`publicRouter`, `apiRouter`, `adminRouter`) dengan middleware auth yang tepat — sangat jelas dan mudah diaudit. |
+| Aspek                    | Keterangan                                                                                                                   |
+| :----------------------- | :--------------------------------------------------------------------------------------------------------------------------- |
+| **Monorepo Structure**   | `backend/` dan `frontend/` dalam satu repo memudahkan development dan deployment coordination.                               |
+| **Router Separation**    | Tiga router (`publicRouter`, `apiRouter`, `adminRouter`) dengan middleware auth yang tepat — sangat jelas dan mudah diaudit. |
 | **Prisma Schema Design** | Menggunakan `@@map` untuk naming database columns (snake_case) sementara model Prisma menggunakan camelCase — best practice. |
-| **Snapshot Pattern** | OrderItem menyimpan snapshot harga dan nama produk — kritis untuk e-commerce. |
-| **Production Queue** | Desain antrian produksi dengan kapasitas 10 order/hari dan auto-shift ke hari berikutnya — sesuai kebutuhan bisnis. |
-| **Payment Model** | Satu payment per order (`@unique orderId`), mendukung re-upload setelah reject — flow bisnis yang tepat. |
+| **Snapshot Pattern**     | OrderItem menyimpan snapshot harga dan nama produk — kritis untuk e-commerce.                                                |
+| **Production Queue**     | Desain antrian produksi dengan kapasitas 10 order/hari dan auto-shift ke hari berikutnya — sesuai kebutuhan bisnis.          |
+| **Payment Model**        | Satu payment per order (`@unique orderId`), mendukung re-upload setelah reject — flow bisnis yang tepat.                     |
 
 ### 3.2 Temuan Arsitektur
 
@@ -343,9 +345,11 @@ Backend hanya menggunakan `console.error` di `error-middleware.js`. Untuk produc
 **A-01: Auto-Cancel Cron Job Belum Diimplementasi**
 
 CONTEXT.md Section 8 Poin 7 menyebutkan:
-> *"Auto-Cancel Payment: Scheduled job (cron) memeriksa order `PENDING_PAYMENT` yang melewati `payment_deadline` dan otomatis mengubah statusnya menjadi `CANCELLED`."*
+
+> _"Auto-Cancel Payment: Scheduled job (cron) memeriksa order `PENDING_PAYMENT` yang melewati `payment_deadline` dan otomatis mengubah statusnya menjadi `CANCELLED`."_
 
 CONTEXT.md Section 3 juga menyebutkan folder `src/jobs/` untuk scheduled jobs. Namun:
+
 - Folder `src/jobs/` **tidak ada**.
 - Tidak ada implementasi cron job sama sekali.
 - Tidak ada dependency `node-cron` atau `node-schedule` di `package.json`.
@@ -361,20 +365,24 @@ Tanpa fitur ini, order `PENDING_PAYMENT` yang melewati deadline akan **tetap ter
 **File:** `services/user-service.js:78`, `middleware/auth-middleware.js`
 
 Sistem autentikasi saat ini:
+
 1. Login → Generate UUID → Simpan di kolom `token` di tabel `User`
 2. Setiap request → Query database: `findFirst({ where: { token } })`
 
 **Masalah:**
+
 - **Token tidak pernah expire** — Sekali login, token valid selamanya (sampai logout manual)
 - **Database hit per request** — Setiap API call authenticated memerlukan 1 query database tambahan
 - **Satu user = satu session** — Login di device baru menimpa token lama, otomatis logout device sebelumnya (bisa jadi fitur atau bug tergantung requirement)
 
 **Rekomendasi untuk jangka pendek (tanpa mengubah arsitektur):**
+
 - Tambahkan kolom `tokenExpiredAt` di tabel `User`
 - Set expiration saat login (misal 7 hari)
 - Cek expiration di `authMiddleware`
 
 **Rekomendasi untuk jangka panjang:**
+
 - Migrasi ke JWT (access token + refresh token)
 - Gunakan `httpOnly` cookie untuk refresh token
 
@@ -393,6 +401,7 @@ File `user-service.js` menangani logic User DAN Address (createAddress, listAddr
 **A-04: Tidak Ada Soft Delete**
 
 Semua operasi delete menggunakan hard delete (`prisma.delete` / `prisma.deleteMany`). Untuk e-commerce, data produk dan varian sebaiknya tidak benar-benar dihapus karena:
+
 - Ada `OrderItem` yang mereferensikan `ProductVariant` (meskipun sudah snapshot, FK masih ada)
 - Data historis penting untuk audit trail
 
@@ -417,6 +426,7 @@ Semua 16 halaman frontend (auth, customer, admin) masih berupa placeholder. Ini 
 Prisma schema tidak mendefinisikan `onDelete` behavior pada relasi. Ini berarti default behavior Prisma/PostgreSQL akan berlaku (biasanya `RESTRICT` atau `NO ACTION`), yang bisa menyebabkan error saat menghapus parent record.
 
 Contoh masalah:
+
 - Hapus User → gagal karena ada Address, Order, Review, Cart
 - Hapus Product → gagal karena ada ProductVariant, Review
 - Hapus Order → gagal karena ada OrderItem, Payment, ProductionQueue
@@ -429,13 +439,13 @@ Contoh masalah:
 
 Prisma schema hanya mendefinisikan index via `@unique` dan `@@unique`. Tidak ada index tambahan untuk query yang sering dilakukan:
 
-| Query | Field yang Perlu Index |
-|:---|:---|
-| Auth middleware (setiap request) | `users.token` |
-| Order list by user | `orders.user_id` |
-| Order filter by status | `orders.status` |
-| Production queue by date | `production_queue.production_date` |
-| Product search by name | `products.name` (untuk `contains`) |
+| Query                            | Field yang Perlu Index             |
+| :------------------------------- | :--------------------------------- |
+| Auth middleware (setiap request) | `users.token`                      |
+| Order list by user               | `orders.user_id`                   |
+| Order filter by status           | `orders.status`                    |
+| Production queue by date         | `production_queue.production_date` |
+| Product search by name           | `products.name` (untuk `contains`) |
 
 **Rekomendasi:** Tambahkan `@@index` di schema Prisma untuk field-field di atas.
 
@@ -445,48 +455,48 @@ Prisma schema hanya mendefinisikan index via `@unique` dan `@@unique`. Tidak ada
 
 ### 4.1 Status Progress API
 
-| Tahap | Total | Selesai | Belum | Status |
-|:---|:---:|:---:|:---:|:---|
-| 1 — Auth & User | 5 | 5 | 0 | ✅ Complete |
-| 2 — Master Data Admin | 10 | 10 | 0 | ✅ Complete |
-| 3 — Produk Public | 2 | 2 | 0 | ✅ Complete |
-| 4 — Alamat | 4 | 4 | 0 | ✅ Complete |
-| 5 — Cart | 4 | 4 | 0 | ✅ Complete |
-| 6 — Order | 3 | 3 | 0 | ✅ Complete |
-| 7 — Payment | 3 | 3 | 0 | ✅ Complete |
-| 8 — Admin Order | 5 | 5 | 0 | ✅ Complete |
-| 9 — Review | 1 | 0 | 1 | ❌ Belum |
-| 10 — Dashboard | 2 | 0 | 2 | ❌ Belum |
-| **Total** | **39** | **36** | **3** | **92% selesai** |
+| Tahap                 | Total  | Selesai | Belum | Status          |
+| :-------------------- | :----: | :-----: | :---: | :-------------- |
+| 1 — Auth & User       |   5    |    5    |   0   | ✅ Complete     |
+| 2 — Master Data Admin |   10   |   10    |   0   | ✅ Complete     |
+| 3 — Produk Public     |   2    |    2    |   0   | ✅ Complete     |
+| 4 — Alamat            |   4    |    4    |   0   | ✅ Complete     |
+| 5 — Cart              |   4    |    4    |   0   | ✅ Complete     |
+| 6 — Order             |   3    |    3    |   0   | ✅ Complete     |
+| 7 — Payment           |   3    |    3    |   0   | ✅ Complete     |
+| 8 — Admin Order       |   5    |    5    |   0   | ✅ Complete     |
+| 9 — Review            |   1    |    0    |   1   | ❌ Belum        |
+| 10 — Dashboard        |   2    |    0    |   2   | ❌ Belum        |
+| **Total**             | **39** | **36**  | **3** | **92% selesai** |
 
 ### 4.2 Gap Analysis — Fitur vs Implementasi
 
 #### Fitur yang Ada di CONTEXT.md Tapi Belum Ada di Kode:
 
-| # | Fitur | Status | Keterangan |
-|:---|:---|:---|:---|
-| R-01 | Auto-Cancel Payment (Cron) | ❌ Belum | Kritis — order expired tidak dibersihkan |
-| R-02 | Review & Rating API | ❌ Belum | Fase 2, sudah ada di schema Prisma |
-| R-03 | Dashboard API | ❌ Belum | Fase 2 |
-| R-04 | Statistics API | ❌ Belum | Fase 2 |
-| R-05 | Email Notification | ❌ Belum | Nodemailer ada di deps tapi belum dipakai |
-| R-06 | Tracking URL Generation | ⚠️ Parsial | Field `trackingUrl` ada di schema tapi belum auto-generate |
-| R-07 | Flat Rate Shipping | ⚠️ Parsial | Hardcode `shippingCost: 0` di order service |
-| R-08 | Ongkir per Zona | ❌ Belum | Direncanakan fase lanjutan |
-| R-09 | Frontend Implementation | ❌ Skeleton | Semua 16 page masih placeholder |
+| #    | Fitur                      | Status      | Keterangan                                                 |
+| :--- | :------------------------- | :---------- | :--------------------------------------------------------- |
+| R-01 | Auto-Cancel Payment (Cron) | ❌ Belum    | Kritis — order expired tidak dibersihkan                   |
+| R-02 | Review & Rating API        | ❌ Belum    | Fase 2, sudah ada di schema Prisma                         |
+| R-03 | Dashboard API              | ❌ Belum    | Fase 2                                                     |
+| R-04 | Statistics API             | ❌ Belum    | Fase 2                                                     |
+| R-05 | Email Notification         | ❌ Belum    | Nodemailer ada di deps tapi belum dipakai                  |
+| R-06 | Tracking URL Generation    | ⚠️ Parsial  | Field `trackingUrl` ada di schema tapi belum auto-generate |
+| R-07 | Flat Rate Shipping         | ⚠️ Parsial  | Hardcode `shippingCost: 0` di order service                |
+| R-08 | Ongkir per Zona            | ❌ Belum    | Direncanakan fase lanjutan                                 |
+| R-09 | Frontend Implementation    | ❌ Skeleton | Semua 16 page masih placeholder                            |
 
 #### Fitur yang Sudah Diimplementasi Sesuai Requirement:
 
-| # | Fitur | Status |
-|:---|:---|:---|
-| ✅ | Production Queue (Maks 10/hari + auto-shift) | Sesuai requirement |
-| ✅ | Snapshot Pattern di OrderItem | Sesuai requirement |
-| ✅ | Payment Deadline (24 jam) | Sesuai requirement |
-| ✅ | Payment Re-upload setelah Reject | Sesuai requirement |
-| ✅ | Status Transition Validation | Sesuai requirement |
-| ✅ | Slug-based Product URL | Sesuai requirement |
-| ✅ | Role-based Access (Customer/Admin) | Sesuai requirement |
-| ✅ | Data Isolation per User | Sesuai requirement |
+| #   | Fitur                                        | Status             |
+| :-- | :------------------------------------------- | :----------------- |
+| ✅  | Production Queue (Maks 10/hari + auto-shift) | Sesuai requirement |
+| ✅  | Snapshot Pattern di OrderItem                | Sesuai requirement |
+| ✅  | Payment Deadline (24 jam)                    | Sesuai requirement |
+| ✅  | Payment Re-upload setelah Reject             | Sesuai requirement |
+| ✅  | Status Transition Validation                 | Sesuai requirement |
+| ✅  | Slug-based Product URL                       | Sesuai requirement |
+| ✅  | Role-based Access (Customer/Admin)           | Sesuai requirement |
+| ✅  | Data Isolation per User                      | Sesuai requirement |
 
 ### 4.3 Temuan Requirement
 
@@ -498,7 +508,7 @@ Prisma schema hanya mendefinisikan index via `@unique` dan `@@unique`. Tidak ada
 shippingCost: 0, // Flat rate 0 (tahap awal)
 ```
 
-CONTEXT.md menyebutkan *"Flat Rate Shipping: Ongkir menggunakan flat rate per zona untuk tahap awal"*. Tapi saat ini ongkir adalah 0 (gratis), bukan flat rate. Perlu didefinisikan berapa flat rate yang dimaksud, atau minimal buat konfigurasi environment variable.
+CONTEXT.md menyebutkan _"Flat Rate Shipping: Ongkir menggunakan flat rate per zona untuk tahap awal"_. Tapi saat ini ongkir adalah 0 (gratis), bukan flat rate. Perlu didefinisikan berapa flat rate yang dimaksud, atau minimal buat konfigurasi environment variable.
 
 ---
 
@@ -524,15 +534,15 @@ Admin hanya bisa CREATE dan LIST untuk Flavor dan Size. Tidak ada endpoint PATCH
 
 ### 5.1 Hal yang Sudah Baik ✅
 
-| Aspek | Keterangan |
-|:---|:---|
-| **Helmet** | HTTP security headers diterapkan via helmet. |
-| **CORS** | Dikonfigurasi dengan origin yang spesifik, bukan wildcard `*`. |
-| **Rate Limiting** | `express-rate-limit` aktif (100 req/15 min per IP). |
-| **Password Hashing** | bcrypt dengan salt rounds 10 — standar industri. |
-| **Router Separation** | Public, customer, admin memiliki middleware chain yang jelas. |
-| **File Upload Validation** | Mime type check + file size limit (2MB) di multer. |
-| **Data Isolation** | Query selalu menyertakan `userId` untuk customer data. |
+| Aspek                      | Keterangan                                                     |
+| :------------------------- | :------------------------------------------------------------- |
+| **Helmet**                 | HTTP security headers diterapkan via helmet.                   |
+| **CORS**                   | Dikonfigurasi dengan origin yang spesifik, bukan wildcard `*`. |
+| **Rate Limiting**          | `express-rate-limit` aktif (100 req/15 min per IP).            |
+| **Password Hashing**       | bcrypt dengan salt rounds 10 — standar industri.               |
+| **Router Separation**      | Public, customer, admin memiliki middleware chain yang jelas.  |
+| **File Upload Validation** | Mime type check + file size limit (2MB) di multer.             |
+| **Data Isolation**         | Query selalu menyertakan `userId` untuk customer data.         |
 
 ### 5.2 Temuan Security
 
@@ -557,6 +567,7 @@ Seperti disebutkan di A-02, token UUID tidak pernah expire. Jika token bocor (vi
 Rate limit global 100 req/15 min berlaku untuk semua endpoint. Endpoint login seharusnya memiliki rate limit yang lebih ketat (misal 5 req/15 min per IP) untuk mencegah brute force attack.
 
 **Rekomendasi:**
+
 ```javascript
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -587,12 +598,18 @@ Pastikan Cloudinary credentials hanya diakses di backend (sudah benar saat ini �
 **File:** `middleware/auth-middleware.js:14, 20, 35`
 
 ```javascript
-{ error: "Akses ditolak. Token tidak ditemukan." }
-{ error: "Akses ditolak. Token tidak valid." }
-{ error: "Akses ditolak. Token tidak valid atau sudah expired." }
+{
+  error: "Akses ditolak. Token tidak ditemukan.";
+}
+{
+  error: "Akses ditolak. Token tidak valid.";
+}
+{
+  error: "Akses ditolak. Token tidak valid atau sudah expired.";
+}
 ```
 
-Tiga pesan error berbeda memungkinkan attacker membedakan antara *"tidak ada token"*, *"format token salah"*, dan *"token expired"*. Idealnya semua menggunakan satu pesan yang sama untuk menyulitkan enumeration.
+Tiga pesan error berbeda memungkinkan attacker membedakan antara _"tidak ada token"_, _"format token salah"_, dan _"token expired"_. Idealnya semua menggunakan satu pesan yang sama untuk menyulitkan enumeration.
 
 **Rekomendasi:** Gunakan pesan generic: `"Akses ditolak."` untuk semua kasus 401.
 
@@ -603,7 +620,7 @@ Tiga pesan error berbeda memungkinkan attacker membedakan antara *"tidak ada tok
 **File:** `validation/user-validation.js:19-22`
 
 ```javascript
-password: z.string().min(6, "Password minimal 6 karakter.")
+password: z.string().min(6, "Password minimal 6 karakter.");
 ```
 
 Minimum 6 karakter tanpa requirement untuk uppercase, lowercase, angka, atau special character. Ini terlalu lemah untuk production e-commerce yang menyimpan data pelanggan.
@@ -644,45 +661,45 @@ Karena menggunakan `Authorization: Bearer` header (bukan cookie), CSRF attack ti
 
 ### 🔴 Prioritas Tinggi — Harus Diselesaikan Sebelum Production
 
-| ID | Kategori | Temuan | Effort |
-|:---|:---|:---|:---|
-| A-01 | Arsitektur | Auto-cancel cron job belum diimplementasi | Medium |
-| A-02 | Arsitektur | Token tidak punya expiration | Medium |
-| C-01 | Code | `parseInt` tanpa radix + tanpa validasi NaN | Kecil |
-| C-02 | Code | Race condition pada order number generation | Medium |
-| C-03 | Code | Hapus produk gagal karena FK constraint | Kecil |
-| C-04 | Code | Hapus varian gagal karena FK constraint | Kecil |
-| S-01 | Security | Token di localStorage rentan XSS | Medium |
-| S-03 | Security | Login tanpa rate limit terpisah | Kecil |
+| ID   | Kategori   | Temuan                                      | Effort |
+| :--- | :--------- | :------------------------------------------ | :----- |
+| A-01 | Arsitektur | Auto-cancel cron job belum diimplementasi   | Medium |
+| A-02 | Arsitektur | Token tidak punya expiration                | Medium |
+| C-01 | Code       | `parseInt` tanpa radix + tanpa validasi NaN | Kecil  |
+| C-02 | Code       | Race condition pada order number generation | Medium |
+| C-03 | Code       | Hapus produk gagal karena FK constraint     | Kecil  |
+| C-04 | Code       | Hapus varian gagal karena FK constraint     | Kecil  |
+| S-01 | Security   | Token di localStorage rentan XSS            | Medium |
+| S-03 | Security   | Login tanpa rate limit terpisah             | Kecil  |
 
 ### 🟡 Prioritas Sedang — Harus Diselesaikan Dalam Sprint Berikutnya
 
-| ID | Kategori | Temuan | Effort |
-|:---|:---|:---|:---|
-| M-02 | Code | List order customer tanpa paginasi | Kecil |
-| M-04 | Code | Cart store frontend tidak cocok dengan backend response | Kecil |
-| M-05 | Code | `Number()` tanpa validasi NaN | Kecil |
-| M-06 | Code | Tidak ada max limit `size` di search product | Kecil |
-| A-07 | Arsitektur | Tidak ada `onDelete` cascade/restrict di schema | Medium |
-| A-08 | Arsitektur | Tidak ada database index | Kecil |
-| S-06 | Security | Error message terlalu informatif di auth | Kecil |
-| S-07 | Security | Password policy terlalu lemah | Kecil |
-| R-10 | Requirement | Shipping cost hardcode 0 | Kecil |
-| R-11 | Requirement | `PAYMENT_DEADLINE_HOURS` env var tidak digunakan | Kecil |
+| ID   | Kategori    | Temuan                                                  | Effort |
+| :--- | :---------- | :------------------------------------------------------ | :----- |
+| M-02 | Code        | List order customer tanpa paginasi                      | Kecil  |
+| M-04 | Code        | Cart store frontend tidak cocok dengan backend response | Kecil  |
+| M-05 | Code        | `Number()` tanpa validasi NaN                           | Kecil  |
+| M-06 | Code        | Tidak ada max limit `size` di search product            | Kecil  |
+| A-07 | Arsitektur  | Tidak ada `onDelete` cascade/restrict di schema         | Medium |
+| A-08 | Arsitektur  | Tidak ada database index                                | Kecil  |
+| S-06 | Security    | Error message terlalu informatif di auth                | Kecil  |
+| S-07 | Security    | Password policy terlalu lemah                           | Kecil  |
+| R-10 | Requirement | Shipping cost hardcode 0                                | Kecil  |
+| R-11 | Requirement | `PAYMENT_DEADLINE_HOURS` env var tidak digunakan        | Kecil  |
 
 ### 🟢 Prioritas Rendah — Nice to Have / Improvement
 
-| ID | Kategori | Temuan | Effort |
-|:---|:---|:---|:---|
-| A-03 | Arsitektur | User service menangani domain Address | Medium |
-| A-04 | Arsitektur | Tidak ada soft delete | Medium |
-| A-05 | Arsitektur | Email notification belum diimplementasi | Medium |
-| I-01 | Code | AdminLayout tidak handle `user === null` | Kecil |
-| I-02 | Code | Layout menggunakan `<a href>` bukan `<Link>` | Kecil |
-| I-04 | Code | CORS hanya mendukung satu origin | Kecil |
-| I-05 | Code | Tidak ada `trust proxy` setting | Kecil |
-| I-08 | Code | Tidak ada logging library | Medium |
-| S-10 | Security | Tidak ada audit logging untuk admin | Medium |
+| ID   | Kategori   | Temuan                                       | Effort |
+| :--- | :--------- | :------------------------------------------- | :----- |
+| A-03 | Arsitektur | User service menangani domain Address        | Medium |
+| A-04 | Arsitektur | Tidak ada soft delete                        | Medium |
+| A-05 | Arsitektur | Email notification belum diimplementasi      | Medium |
+| I-01 | Code       | AdminLayout tidak handle `user === null`     | Kecil  |
+| I-02 | Code       | Layout menggunakan `<a href>` bukan `<Link>` | Kecil  |
+| I-04 | Code       | CORS hanya mendukung satu origin             | Kecil  |
+| I-05 | Code       | Tidak ada `trust proxy` setting              | Kecil  |
+| I-08 | Code       | Tidak ada logging library                    | Medium |
+| S-10 | Security   | Tidak ada audit logging untuk admin          | Medium |
 
 ---
 
@@ -692,7 +709,7 @@ Berikut adalah prompt yang dapat diberikan kepada AI coding agent berdasarkan te
 
 ### Prompt 1 — Fix Kritis: Validasi Parameter & Race Condition
 
-```
+````
 Berdasarkan review code, perbaiki masalah berikut:
 
 1. Di semua file Controller yang menggunakan `parseInt()` atau `Number()` untuk parsing `req.params`, tambahkan validasi NaN dengan pattern:
@@ -701,8 +718,9 @@ Berdasarkan review code, perbaiki masalah berikut:
    if (isNaN(id)) {
      return next(new ResponseError(400, "ID tidak valid."));
    }
-   ```
-   File: cart-controller.js, order-controller.js, user-controller.js, product-admin-controller.js, payment-controller.js, payment-admin-controller.js
+````
+
+File: cart-controller.js, order-controller.js, user-controller.js, product-admin-controller.js, payment-controller.js, payment-admin-controller.js
 
 2. Di `order-service.js`, ubah mekanisme order number generation agar menangani race condition:
    - Tambahkan retry loop (max 3 attempts) yang catch Prisma unique constraint error
@@ -714,11 +732,13 @@ Berdasarkan review code, perbaiki masalah berikut:
 
 Ikuti semua konvensi di CONTEXT.md. Tambahkan dokumentasi bahasa Indonesia.
 Jalankan test yang relevan setelah selesai.
+
 ```
 
 ### Prompt 2 — Implementasi Auto-Cancel Cron Job
 
 ```
+
 Implementasikan fitur Auto-Cancel Order yang disebutkan di CONTEXT.md Section 8 Poin 7:
 
 1. Buat folder `src/jobs/` dengan file `auto-cancel-job.js`
@@ -735,11 +755,13 @@ Gunakan `PAYMENT_DEADLINE_HOURS` dari `.env` untuk menentukan deadline (saat ini
 
 Ikuti semua konvensi di CONTEXT.md.
 Update CONTEXT.md untuk menandai fitur ini sebagai selesai.
+
 ```
 
 ### Prompt 3 — Fix Security: Token Expiration & Rate Limit Login
 
 ```
+
 Perbaiki masalah security berikut:
 
 1. Tambahkan token expiration:
@@ -760,11 +782,13 @@ Perbaiki masalah security berikut:
 
 Ikuti semua konvensi di CONTEXT.md.
 Buat/update unit test yang relevan.
+
 ```
 
 ### Prompt 4 — Paginasi dan Konsistensi Response
 
 ```
+
 Perbaiki masalah paginasi dan konsistensi:
 
 1. Di `order-service.js`, tambahkan paginasi pada fungsi `list`:
@@ -775,6 +799,7 @@ Perbaiki masalah paginasi dan konsistensi:
    - Update controller dan route sesuai
 
 2. Di `order-service.js` fungsi `create`, ganti hardcode 24 jam menjadi membaca `PAYMENT_DEADLINE_HOURS` dari environment:
+
    ```javascript
    const deadlineHours = parseInt(process.env.PAYMENT_DEADLINE_HOURS || "24", 10);
    const paymentDeadline = new Date(now.getTime() + deadlineHours * 60 * 60 * 1000);
@@ -783,11 +808,13 @@ Perbaiki masalah paginasi dan konsistensi:
 3. Update `manual-test-api.md` untuk endpoint list order customer agar mencantumkan query params paginasi.
 
 Ikuti semua konvensi di CONTEXT.md.
+
 ```
 
 ### Prompt 5 — Database Index & Schema Improvement
 
 ```
+
 Perbaiki schema Prisma:
 
 1. Tambahkan database index untuk optimasi query:
@@ -808,8 +835,10 @@ Perbaiki schema Prisma:
 
 Ikuti semua konvensi di CONTEXT.md.
 Update CONTEXT.md jika ada keputusan arsitektur baru.
+
 ```
 
 ---
 
 _Dokumen review ini dibuat berdasarkan analisis menyeluruh terhadap seluruh source code proyek Utique per tanggal 3 Juni 2026._
+```

@@ -1,4 +1,5 @@
 import orderService from "../services/order-service.js";
+import { ResponseError } from "../error/response-error.js";
 
 /**
  * Controller untuk menangani request terkait Order (sisi Customer).
@@ -33,7 +34,10 @@ const list = async (req, res, next) => {
 const get = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const orderId = parseInt(req.params.id);
+    const orderId = parseInt(req.params.id, 10);
+    if (isNaN(orderId)) {
+      throw new ResponseError(400, "ID order tidak valid.");
+    }
     const result = await orderService.get(userId, orderId);
     res.status(200).json({
       data: result,
