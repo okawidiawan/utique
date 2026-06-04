@@ -1,4 +1,5 @@
 import adminOrderService from "../services/admin-order-service.js";
+import { ResponseError } from "../error/response-error.js";
 
 // ==========================================
 // Admin Order Controller — Handler request HTTP untuk manajemen order oleh admin
@@ -24,7 +25,11 @@ const getAll = async (req, res, next) => {
  */
 const getById = async (req, res, next) => {
   try {
-    const result = await adminOrderService.getOrderById(req.params.id);
+    const orderId = parseInt(req.params.id, 10);
+    if (isNaN(orderId)) {
+      throw new ResponseError(400, "ID order tidak valid.");
+    }
+    const result = await adminOrderService.getOrderById(orderId);
     res.status(200).json({ data: result });
   } catch (e) {
     next(e);
@@ -37,7 +42,11 @@ const getById = async (req, res, next) => {
  */
 const updateStatus = async (req, res, next) => {
   try {
-    const result = await adminOrderService.updateOrderStatus(req.params.id, req.body);
+    const orderId = parseInt(req.params.id, 10);
+    if (isNaN(orderId)) {
+      throw new ResponseError(400, "ID order tidak valid.");
+    }
+    const result = await adminOrderService.updateOrderStatus(orderId, req.body);
     res.status(200).json({ data: result });
   } catch (e) {
     next(e);
@@ -50,7 +59,11 @@ const updateStatus = async (req, res, next) => {
  */
 const updateShipping = async (req, res, next) => {
   try {
-    const result = await adminOrderService.updateOrderShipping(req.params.id, req.body);
+    const orderId = parseInt(req.params.id, 10);
+    if (isNaN(orderId)) {
+      throw new ResponseError(400, "ID order tidak valid.");
+    }
+    const result = await adminOrderService.updateOrderShipping(orderId, req.body);
     res.status(200).json({ data: result });
   } catch (e) {
     next(e);
@@ -63,7 +76,11 @@ const updateShipping = async (req, res, next) => {
  */
 const updateEstimation = async (req, res, next) => {
   try {
-    const result = await adminOrderService.updateOrderEstimation(req.params.id, req.body);
+    const orderId = parseInt(req.params.id, 10);
+    if (isNaN(orderId)) {
+      throw new ResponseError(400, "ID order tidak valid.");
+    }
+    const result = await adminOrderService.updateOrderEstimation(orderId, req.body);
     res.status(200).json({ data: result });
   } catch (e) {
     next(e);

@@ -1,4 +1,5 @@
 import productAdminService from "../services/product-admin-service.js";
+import { ResponseError } from "../error/response-error.js";
 
 // ==========================================
 // Product Admin Controller — Handler untuk request HTTP domain Product & Variant (Admin)
@@ -30,7 +31,10 @@ const create = async (req, res, next) => {
  */
 const update = async (req, res, next) => {
   try {
-    const productId = Number(req.params.id);
+    const productId = parseInt(req.params.id, 10);
+    if (isNaN(productId)) {
+      throw new ResponseError(400, "ID produk tidak valid.");
+    }
     const result = await productAdminService.update(productId, req.body);
     res.status(200).json({
       data: result,
@@ -48,7 +52,10 @@ const update = async (req, res, next) => {
  */
 const remove = async (req, res, next) => {
   try {
-    const productId = Number(req.params.id);
+    const productId = parseInt(req.params.id, 10);
+    if (isNaN(productId)) {
+      throw new ResponseError(400, "ID produk tidak valid.");
+    }
     const result = await productAdminService.remove(productId);
     res.status(200).json({
       data: result,
@@ -66,7 +73,10 @@ const remove = async (req, res, next) => {
  */
 const createVariant = async (req, res, next) => {
   try {
-    const productId = Number(req.params.id);
+    const productId = parseInt(req.params.id, 10);
+    if (isNaN(productId)) {
+      throw new ResponseError(400, "ID produk tidak valid.");
+    }
     const result = await productAdminService.createVariant(productId, req.body);
     res.status(201).json({
       data: result,
@@ -84,7 +94,10 @@ const createVariant = async (req, res, next) => {
  */
 const updateVariant = async (req, res, next) => {
   try {
-    const variantId = Number(req.params.id);
+    const variantId = parseInt(req.params.id, 10);
+    if (isNaN(variantId)) {
+      throw new ResponseError(400, "ID varian tidak valid.");
+    }
     const result = await productAdminService.updateVariant(variantId, req.body);
     res.status(200).json({
       data: result,
@@ -102,7 +115,10 @@ const updateVariant = async (req, res, next) => {
  */
 const removeVariant = async (req, res, next) => {
   try {
-    const variantId = Number(req.params.id);
+    const variantId = parseInt(req.params.id, 10);
+    if (isNaN(variantId)) {
+      throw new ResponseError(400, "ID varian tidak valid.");
+    }
     const result = await productAdminService.removeVariant(variantId);
     res.status(200).json({
       data: result,

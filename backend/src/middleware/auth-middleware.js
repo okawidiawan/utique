@@ -28,15 +28,31 @@ export const authMiddleware = async (req, res, next) => {
         name: true,
         email: true,
         role: true,
+        tokenExpiredAt: true,
       },
     });
 
     if (!user) {
-      return res.status(401).json({ error: "Akses ditolak. Token tidak valid atau sudah expired." });
+      return res.status(401).json({ error: "Akses ditolak. Token tidak valid." });
+    }
+
+    // Cek apakah token sudah expired
+    if (user.tokenExpiredAt && user.tokenExpiredAt < new Date()) {
+      // Hapus token yang sudah expired dari database (optional tapi disarankan)
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { token: null, tokenExpiredAt: null },
+      });
+      return res.status(401).json({ error: "Akses ditolak. Token sudah expired." });
     }
 
     // Simpan data user di request untuk digunakan di handler selanjutnya
-    req.user = user;
+    req.user = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    };
     next();
   } catch (error) {
     next(error);

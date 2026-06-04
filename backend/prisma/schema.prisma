@@ -48,6 +48,7 @@ model User {
   phone     String?  @db.VarChar(20)
   role      Role     @default(CUSTOMER)
   token     String?  @db.VarChar(255)
+  tokenExpiredAt DateTime? @map("token_expired_at")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

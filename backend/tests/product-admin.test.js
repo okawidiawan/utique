@@ -1,18 +1,19 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import request from "supertest";
 import { web } from "../src/application/web.js";
+import { prisma } from "../src/application/database.js";
 import {
-  removeTestUser,
+  masterCleanup,
   createTestUser,
   createTestAdmin,
-  removeAllFlavors,
   createTestFlavor,
-  removeAllSizes,
   createTestSize,
-  removeAllProducts,
   createTestProduct,
-  removeAllVariants,
   createTestVariant,
+  createTestCart,
+  createTestCartItem,
+  createTestAddress,
+  createTestOrder,
 } from "./test-util.js";
 
 // ==========================================
@@ -20,16 +21,13 @@ import {
 // ==========================================
 describe("Product Admin API", () => {
   beforeEach(async () => {
+    await masterCleanup();
     await createTestAdmin();
     await createTestUser();
   });
 
   afterEach(async () => {
-    await removeAllVariants();
-    await removeAllProducts();
-    await removeAllFlavors();
-    await removeAllSizes();
-    await removeTestUser();
+    await masterCleanup();
   });
 
   describe("Product CRUD", () => {
@@ -142,6 +140,42 @@ describe("Product Admin API", () => {
 
         expect(result.status).toBe(404);
         expect(result.body.error).toBe("Produk tidak ditemukan.");
+      });
+
+      it("should reject delete product if it is in cart", async () => {
+        const existingUser = await prisma.user.findUnique({ where: { email: "test@example.com" } });
+        const product = await createTestProduct();
+        const flavor = await createTestFlavor();
+        const size = await createTestSize();
+        const variant = await createTestVariant(product.id, flavor.id, size.id);
+        
+        const cart = await createTestCart(existingUser.id);
+        await createTestCartItem(cart.id, variant.id, 1);
+
+        const result = await request(web)
+          .delete(`/api/admin/products/${product.id}`)
+          .set("Authorization", "Bearer admin-token");
+
+        expect(result.status).toBe(400);
+        expect(result.body.error).toBe("Produk tidak bisa dihapus karena masih terdapat dalam pesanan atau keranjang aktif.");
+      });
+
+      it("should reject delete product if it is in order", async () => {
+        const existingUser = await prisma.user.findUnique({ where: { email: "test@example.com" } });
+        const product = await createTestProduct();
+        const flavor = await createTestFlavor();
+        const size = await createTestSize();
+        const variant = await createTestVariant(product.id, flavor.id, size.id);
+        const address = await createTestAddress(existingUser.id);
+        
+        await createTestOrder(existingUser.id, address.id, variant.id);
+
+        const result = await request(web)
+          .delete(`/api/admin/products/${product.id}`)
+          .set("Authorization", "Bearer admin-token");
+
+        expect(result.status).toBe(400);
+        expect(result.body.error).toBe("Produk tidak bisa dihapus karena masih terdapat dalam pesanan atau keranjang aktif.");
       });
     });
   });
@@ -297,6 +331,36 @@ describe("Product Admin API", () => {
 
         expect(result.status).toBe(404);
         expect(result.body.error).toBe("Varian tidak ditemukan.");
+      });
+
+      it("should reject delete variant if it is in cart", async () => {
+        const existingUser = await prisma.user.findUnique({ where: { email: "test@example.com" } });
+        const variant = await createTestVariant(product.id, flavor.id, size.id);
+        
+        const cart = await createTestCart(existingUser.id);
+        await createTestCartItem(cart.id, variant.id, 1);
+
+        const result = await request(web)
+          .delete(`/api/admin/variants/${variant.id}`)
+          .set("Authorization", "Bearer admin-token");
+
+        expect(result.status).toBe(400);
+        expect(result.body.error).toBe("Varian tidak bisa dihapus karena masih terdapat dalam pesanan atau keranjang aktif.");
+      });
+
+      it("should reject delete variant if it is in order", async () => {
+        const existingUser = await prisma.user.findUnique({ where: { email: "test@example.com" } });
+        const variant = await createTestVariant(product.id, flavor.id, size.id);
+        const address = await createTestAddress(existingUser.id);
+        
+        await createTestOrder(existingUser.id, address.id, variant.id);
+
+        const result = await request(web)
+          .delete(`/api/admin/variants/${variant.id}`)
+          .set("Authorization", "Bearer admin-token");
+
+        expect(result.status).toBe(400);
+        expect(result.body.error).toBe("Varian tidak bisa dihapus karena masih terdapat dalam pesanan atau keranjang aktif.");
       });
     });
   });

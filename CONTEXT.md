@@ -252,11 +252,11 @@ PENDING → VERIFIED
 
 1. **Single Frontend App**: Satu aplikasi React untuk customer dan admin. Akses admin dilindungi oleh role-based routing dan middleware backend.
 2. **Pemisahan Router**: Router dibagi menjadi `publicRouter` dan `apiRouter` (customer) dan `adminRouter` (admin). Masing-masing menggunakan middleware auth yang sesuai.
-3. **Stateless Authentication**: Database menyimpan `token` pada tabel `User`. Validasi dilakukan dengan mencocokkan token di header `Authorization` dengan database.
+3. **Stateless Authentication**: Database menyimpan `token` pada tabel `User`. Validasi dilakukan dengan mencocokkan token di header `Authorization` dengan database. Di sisi Frontend, token disimpan di `sessionStorage` untuk keamanan jangka pendek (migrasi ke `httpOnly` cookie direncanakan untuk fase lanjutan).
 4. **Snapshot Pattern**: `OrderItem` menyimpan snapshot data produk (`product_name`, `flavor_name`, `size_name`, `price`) agar data historis tetap akurat meskipun master data produk berubah.
 5. **Semi-Automatic Estimation**: Estimasi produksi dihitung otomatis berdasarkan `production_time_days` + antrian (`ProductionQueue`), tetapi admin bisa override manual.
 6. **Production Capacity**: Sistem memeriksa tabel `ProductionQueue` untuk memastikan tidak melebihi 10 order per hari. Order yang melebihi kapasitas digeser ke hari berikutnya.
-7. **Auto-Cancel Payment**: Scheduled job (cron) memeriksa order `PENDING_PAYMENT` yang melewati `payment_deadline` dan otomatis mengubah statusnya menjadi `CANCELLED`.
+7. **Auto-Cancel Payment**: Scheduled job (cron) berjalan setiap 5 menit untuk memeriksa order `PENDING_PAYMENT` yang melewati `payment_deadline` dan otomatis mengubah statusnya menjadi `CANCELLED` serta menghapus antrian produksi.
 8. **Review Constraint**: User hanya bisa review setelah order berstatus `COMPLETED`, dan hanya bisa review 1x per produk per order.
 9. **Validation Messaging**: Pesan error Zod dikustomisasi menggunakan Bahasa Indonesia untuk kemudahan integrasi dengan Frontend.
 10. **Flat Rate Shipping**: Ongkir menggunakan flat rate per zona untuk tahap awal. Integrasi API ongkir (RajaOngkir) direncanakan untuk fase lanjutan.

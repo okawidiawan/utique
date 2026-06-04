@@ -368,6 +368,21 @@ describe("Cart API", () => {
 
       expect(result.status).toBe(400);
     });
+
+    it("should reject if cart item ID is not a number", async () => {
+      await createTestUser();
+      const user = await getTestUser();
+
+      const result = await request(web)
+        .patch("/api/cart/items/abc")
+        .set("Authorization", `Bearer ${user.token}`)
+        .send({
+          quantity: 10,
+        });
+
+      expect(result.status).toBe(400);
+      expect(result.body.error).toBe("ID item keranjang tidak valid.");
+    });
   });
 
   describe("DELETE /api/cart/items/:id", () => {
@@ -431,6 +446,18 @@ describe("Cart API", () => {
       const result = await request(web).delete("/api/cart/items/1");
 
       expect(result.status).toBe(401);
+    });
+
+    it("should reject if cart item ID is not a number", async () => {
+      await createTestUser();
+      const user = await getTestUser();
+
+      const result = await request(web)
+        .delete("/api/cart/items/abc")
+        .set("Authorization", `Bearer ${user.token}`);
+
+      expect(result.status).toBe(400);
+      expect(result.body.error).toBe("ID item keranjang tidak valid.");
     });
   });
 });

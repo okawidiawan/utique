@@ -6,12 +6,16 @@ export const removeTestUser = async () => {
 };
 
 export const createTestUser = async () => {
+  const tokenExpiredAt = new Date();
+  tokenExpiredAt.setDate(tokenExpiredAt.getDate() + 7);
+
   await prisma.user.create({
     data: {
       name: "Test User",
       email: "test@example.com",
       password: await bcrypt.hash("rahasia123", 10),
       token: "test-token",
+      tokenExpiredAt,
     },
   });
 };
@@ -25,6 +29,9 @@ export const getTestUser = async () => {
 };
 
 export const createTestAdmin = async () => {
+  const tokenExpiredAt = new Date();
+  tokenExpiredAt.setDate(tokenExpiredAt.getDate() + 7);
+
   await prisma.user.create({
     data: {
       name: "Test Admin",
@@ -32,6 +39,7 @@ export const createTestAdmin = async () => {
       password: await bcrypt.hash("rahasia123", 10),
       token: "admin-token",
       role: "ADMIN",
+      tokenExpiredAt,
     },
   });
 };
@@ -152,4 +160,43 @@ export const removeTestOrders = async () => {
   await prisma.payment.deleteMany({});
   await prisma.orderItem.deleteMany({});
   await prisma.order.deleteMany({});
+};
+
+export const createTestOrder = async (userId, addressId, productVariantId) => {
+  return prisma.order.create({
+    data: {
+      orderNumber: `UTQ-TEST-${Date.now()}`,
+      userId,
+      addressId,
+      totalPrice: 25000,
+      grandTotal: 25000,
+      paymentDeadline: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      items: {
+        create: {
+          productVariantId,
+          productName: "Test Product",
+          flavorName: "Test Flavor",
+          sizeName: "Test Size",
+          price: 25000,
+          quantity: 1,
+          subtotal: 25000
+        }
+      }
+    }
+  });
+};
+
+export const masterCleanup = async () => {
+  await prisma.productionQueue.deleteMany({});
+  await prisma.payment.deleteMany({});
+  await prisma.orderItem.deleteMany({});
+  await prisma.order.deleteMany({});
+  await prisma.cartItem.deleteMany({});
+  await prisma.cart.deleteMany({});
+  await prisma.address.deleteMany({});
+  await prisma.productVariant.deleteMany({});
+  await prisma.product.deleteMany({});
+  await prisma.flavor.deleteMany({});
+  await prisma.size.deleteMany({});
+  await prisma.user.deleteMany({});
 };
