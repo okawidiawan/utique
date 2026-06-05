@@ -261,17 +261,6 @@ const listAddresses = async (userId) => {
 const updateAddress = async (userId, addressId, request) => {
   const updateRequest = updateAddressValidation.parse(request);
 
-  const countAddress = await prisma.address.count({
-    where: {
-      id: addressId,
-      userId: userId,
-    },
-  });
-
-  if (countAddress !== 1) {
-    throw new ResponseError(404, "Alamat tidak ditemukan.");
-  }
-
   if (updateRequest.isDefault) {
     await prisma.address.updateMany({
       where: { userId: userId, isDefault: true },
@@ -279,10 +268,17 @@ const updateAddress = async (userId, addressId, request) => {
     });
   }
 
-  return prisma.address.update({
-    where: { id: addressId },
-    data: updateRequest,
-  });
+  try {
+    return await prisma.address.update({
+      where: { id: addressId, userId: userId }, // Compound where
+      data: updateRequest,
+    });
+  } catch (error) {
+    if (error.code === "P2025") {
+      throw new ResponseError(404, "Alamat tidak ditemukan.");
+    }
+    throw error;
+  }
 };
 
 /**

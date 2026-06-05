@@ -16,7 +16,8 @@ const useCartStore = create((set, get) => ({
     try {
       set({ isLoading: true });
       const response = await api.get("/cart");
-      set({ items: response.data.data.items || [], isLoading: false });
+      // Backend mengembalikan array langsung dalam response.data.data
+      set({ items: response.data.data || [], isLoading: false });
     } catch (error) {
       set({ error: error.response?.data?.error, isLoading: false });
     }
@@ -30,7 +31,7 @@ const useCartStore = create((set, get) => ({
   // Hitung total harga
   getTotalPrice: () => {
     return get().items.reduce(
-      (sum, item) => sum + item.quantity * item.productVariant.price,
+      (sum, item) => sum + item.quantity * item.price,
       0
     );
   },

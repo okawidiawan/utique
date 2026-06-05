@@ -114,6 +114,15 @@ describe("Public Product API", () => {
       expect(response.body.paging.total_item).toBe(5);
       expect(response.body.paging.total_page).toBe(3);
     });
+
+    it("should reject if size exceeds 100", async () => {
+      const response = await request(web)
+        .get("/api/products")
+        .query({ size: 101 });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain("Ukuran halaman maksimal 100.");
+    });
   });
 
   describe("GET /api/products/:slug", () => {

@@ -58,7 +58,7 @@ describe("Master Admin API", () => {
           });
 
         expect(result.status).toBe(401);
-        expect(result.body.error).toBe("Akses ditolak. Token tidak ditemukan.");
+        expect(result.body.error).toBe("Akses ditolak.");
       });
 
       it("should reject create flavor if flavor already exists", async () => {

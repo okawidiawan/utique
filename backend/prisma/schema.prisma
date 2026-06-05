@@ -57,6 +57,7 @@ model User {
   reviews   Review[]
   cart      Cart?
 
+  @@index([token]) // Index untuk auth middleware — dipakai setiap request
   @@map("users")
 }
 
@@ -78,9 +79,10 @@ model Address {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  user   User    @relation(fields: [userId], references: [id])
+  user   User    @relation(fields: [userId], references: [id], onDelete: Restrict)
   orders Order[]
 
+  @@index([userId]) // Index untuk query alamat by user
   @@map("addresses")
 }
 
@@ -144,9 +146,9 @@ model ProductVariant {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  product    Product     @relation(fields: [productId], references: [id])
-  flavor     Flavor      @relation(fields: [flavorId], references: [id])
-  size       Size        @relation(fields: [sizeId], references: [id])
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  flavor     Flavor      @relation(fields: [flavorId], references: [id], onDelete: Restrict)
+  size       Size        @relation(fields: [sizeId], references: [id], onDelete: Restrict)
   cartItems  CartItem[]
   orderItems OrderItem[]
 
@@ -163,7 +165,7 @@ model Cart {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  user  User       @relation(fields: [userId], references: [id])
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   items CartItem[]
 
   @@map("carts")
@@ -180,8 +182,8 @@ model CartItem {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
-  cart           Cart           @relation(fields: [cartId], references: [id])
-  productVariant ProductVariant @relation(fields: [productVariantId], references: [id])
+  cart           Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productVariant ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
 
   @@unique([cartId, productVariantId])
   @@map("cart_items")
@@ -208,12 +210,14 @@ model Order {
   createdAt           DateTime    @default(now()) @map("created_at")
   updatedAt           DateTime    @updatedAt @map("updated_at")
 
-  user            User             @relation(fields: [userId], references: [id])
-  address         Address          @relation(fields: [addressId], references: [id])
+  user            User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  address         Address          @relation(fields: [addressId], references: [id], onDelete: Restrict)
   items           OrderItem[]
   payment         Payment?
   productionQueue ProductionQueue?
 
+  @@index([userId]) // Index untuk query order by user
+  @@index([status]) // Index untuk filter by status di admin
   @@map("orders")
 }
 
@@ -232,8 +236,8 @@ model OrderItem {
   subtotal         Int // price * quantity
   createdAt        DateTime @default(now()) @map("created_at")
 
-  order          Order          @relation(fields: [orderId], references: [id])
-  productVariant ProductVariant @relation(fields: [productVariantId], references: [id])
+  order          Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productVariant ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Restrict)
 
   @@map("order_items")
 }
@@ -255,7 +259,7 @@ model Payment {
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
 
-  order Order @relation(fields: [orderId], references: [id])
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@map("payments")
 }
@@ -273,8 +277,8 @@ model Review {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  user    User    @relation(fields: [userId], references: [id])
-  product Product @relation(fields: [productId], references: [id])
+  user    User    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
 
   @@unique([userId, productId, orderId])
   @@map("reviews")
@@ -290,7 +294,8 @@ model ProductionQueue {
   queuePosition  Int      @map("queue_position") // Posisi antrian di hari tersebut
   createdAt      DateTime @default(now()) @map("created_at")
 
-  order Order @relation(fields: [orderId], references: [id])
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
+  @@index([productionDate]) // Index untuk cek kapasitas produksi per tanggal
   @@map("production_queue")
 }

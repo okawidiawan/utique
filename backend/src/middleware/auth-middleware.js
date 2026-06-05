@@ -11,13 +11,13 @@ export const authMiddleware = async (req, res, next) => {
 
     // Cek apakah header Authorization ada dan format Bearer
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Akses ditolak. Token tidak ditemukan." });
+      return res.status(401).json({ error: "Akses ditolak." });
     }
 
     const token = authHeader.split(" ")[1];
 
     if (!token) {
-      return res.status(401).json({ error: "Akses ditolak. Token tidak valid." });
+      return res.status(401).json({ error: "Akses ditolak." });
     }
 
     // Cari user berdasarkan token di database
@@ -33,7 +33,7 @@ export const authMiddleware = async (req, res, next) => {
     });
 
     if (!user) {
-      return res.status(401).json({ error: "Akses ditolak. Token tidak valid." });
+      return res.status(401).json({ error: "Akses ditolak." });
     }
 
     // Cek apakah token sudah expired
@@ -43,7 +43,7 @@ export const authMiddleware = async (req, res, next) => {
         where: { id: user.id },
         data: { token: null, tokenExpiredAt: null },
       });
-      return res.status(401).json({ error: "Akses ditolak. Token sudah expired." });
+      return res.status(401).json({ error: "Akses ditolak." });
     }
 
     // Simpan data user di request untuk digunakan di handler selanjutnya

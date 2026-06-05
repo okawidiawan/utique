@@ -20,6 +20,7 @@ import {
   removeTestAddresses,
   createTestAddress,
   removeTestOrders,
+  createTestOrder,
 } from "./test-util.js";
 
 describe("Order API", () => {
@@ -186,24 +187,76 @@ describe("Order API", () => {
   });
 
   describe("GET /api/orders", () => {
-    it("should be able to list orders", async () => {
+    it("should return orders with default pagination (page 1, size 10)", async () => {
       await createTestUser();
       const user = await getTestUser();
+      const address = await createTestAddress(user.id);
       const flavor = await createTestFlavor();
       const size = await createTestSize();
       const product = await createTestProduct();
       const variant = await createTestVariant(product.id, flavor.id, size.id);
+
+      // Create 15 orders
+      for (let i = 0; i < 15; i++) {
+        await createTestOrder(user.id, address.id, variant.id);
+      }
+
+      const response = await request(web)
+        .get("/api/orders")
+        .set("Authorization", `Bearer ${user.token}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.length).toBe(10);
+      expect(response.body.paging.page).toBe(1);
+      expect(response.body.paging.total_item).toBe(15);
+      expect(response.body.paging.total_page).toBe(2);
+    });
+
+    it("should return orders with custom pagination (page 2, size 5)", async () => {
+      await createTestUser();
+      const user = await getTestUser();
       const address = await createTestAddress(user.id);
+      const flavor = await createTestFlavor();
+      const size = await createTestSize();
+      const product = await createTestProduct();
+      const variant = await createTestVariant(product.id, flavor.id, size.id);
 
-      const cart = await createTestCart(user.id);
-      await createTestCartItem(cart.id, variant.id, 1);
+      // Create 15 orders
+      for (let i = 0; i < 15; i++) {
+        await createTestOrder(user.id, address.id, variant.id);
+      }
 
-      await request(web).post("/api/orders").set("Authorization", `Bearer ${user.token}`).send({ address_id: address.id });
+      const response = await request(web)
+        .get("/api/orders?page=2&size=5")
+        .set("Authorization", `Bearer ${user.token}`);
 
-      const result = await request(web).get("/api/orders").set("Authorization", `Bearer ${user.token}`);
+      expect(response.status).toBe(200);
+      expect(response.body.data.length).toBe(5);
+      expect(response.body.paging.page).toBe(2);
+      expect(response.body.paging.total_item).toBe(15);
+      expect(response.body.paging.total_page).toBe(3);
+    });
 
-      expect(result.status).toBe(200);
-      expect(result.body.data.length).toBe(1);
+    it("should return empty data if page exceeds total pages", async () => {
+      await createTestUser();
+      const user = await getTestUser();
+      const address = await createTestAddress(user.id);
+      const flavor = await createTestFlavor();
+      const size = await createTestSize();
+      const product = await createTestProduct();
+      const variant = await createTestVariant(product.id, flavor.id, size.id);
+
+      await createTestOrder(user.id, address.id, variant.id);
+
+      const response = await request(web)
+        .get("/api/orders?page=2&size=10")
+        .set("Authorization", `Bearer ${user.token}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.length).toBe(0);
+      expect(response.body.paging.page).toBe(2);
+      expect(response.body.paging.total_item).toBe(1);
+      expect(response.body.paging.total_page).toBe(1);
     });
   });
 
