@@ -18,7 +18,7 @@ export const registerUserValidation = z.object({
     .max(100, "Email maksimal 100 karakter."),
   password: z
     .string()
-    .min(6, "Password minimal 6 karakter.")
+    .min(8, "Password minimal 8 karakter.")
     .max(100, "Password maksimal 100 karakter."),
   phone: z
     .string()
@@ -54,7 +54,7 @@ export const updateUserValidation = z.object({
     .optional(),
   password: z
     .string()
-    .min(6, "Password minimal 6 karakter.")
+    .min(8, "Password minimal 8 karakter.")
     .max(100, "Password maksimal 100 karakter.")
     .optional(),
   phone: z

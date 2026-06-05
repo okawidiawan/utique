@@ -58,7 +58,7 @@ describe("User API", () => {
       expect(result.status).toBe(400);
       expect(result.body.error).toContain("Nama wajib diisi.");
       expect(result.body.error).toContain("Format email tidak valid.");
-      expect(result.body.error).toContain("Password minimal 6 karakter.");
+      expect(result.body.error).toContain("Password minimal 8 karakter.");
     });
 
     it("should can register new user without phone", async () => {
@@ -152,7 +152,7 @@ describe("User API", () => {
       const result = await request(web).get("/api/users/current");
 
       expect(result.status).toBe(401);
-      expect(result.body.error).toBe("Akses ditolak. Token tidak ditemukan.");
+      expect(result.body.error).toBe("Akses ditolak.");
     });
 
     it("should reject if token is invalid", async () => {
@@ -163,7 +163,7 @@ describe("User API", () => {
         .set("Authorization", "Bearer wrong-token");
 
       expect(result.status).toBe(401);
-      expect(result.body.error).toBe("Akses ditolak. Token tidak valid.");
+      expect(result.body.error).toBe("Akses ditolak.");
     });
 
     it("should reject if token is expired", async () => {
@@ -183,7 +183,7 @@ describe("User API", () => {
         .set("Authorization", "Bearer test-token");
 
       expect(result.status).toBe(401);
-      expect(result.body.error).toBe("Akses ditolak. Token sudah expired.");
+      expect(result.body.error).toBe("Akses ditolak.");
     });
   });
 
@@ -235,7 +235,7 @@ describe("User API", () => {
         });
 
       expect(result.status).toBe(400);
-      expect(result.body.error).toBe("Password minimal 6 karakter.");
+      expect(result.body.error).toBe("Password minimal 8 karakter.");
     });
 
     it("should reject if email already used by another user", async () => {
@@ -323,7 +323,7 @@ describe("User API", () => {
         .set("Authorization", "Bearer invalid");
 
       expect(result.status).toBe(401);
-      expect(result.body.error).toBe("Akses ditolak. Token tidak valid.");
+      expect(result.body.error).toBe("Akses ditolak.");
     });
 
     it("should not be able to use token after logout", async () => {
@@ -340,7 +340,7 @@ describe("User API", () => {
         .set("Authorization", "Bearer test-token");
 
       expect(result.status).toBe(401);
-      expect(result.body.error).toBe("Akses ditolak. Token tidak valid.");
+      expect(result.body.error).toBe("Akses ditolak.");
     });
   });
 

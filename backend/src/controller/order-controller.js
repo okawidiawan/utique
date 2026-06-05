@@ -22,10 +22,12 @@ const create = async (req, res, next) => {
 const list = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const result = await orderService.list(userId);
-    res.status(200).json({
-      data: result,
-    });
+    const request = {
+      page: req.query.page,
+      size: req.query.size,
+    };
+    const result = await orderService.list(userId, request);
+    res.status(200).json(result);
   } catch (e) {
     next(e);
   }

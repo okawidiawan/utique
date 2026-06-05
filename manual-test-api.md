@@ -192,7 +192,7 @@ Dokumentasi ini berisi daftar endpoint API Utique yang disusun berdasarkan tahap
 - **Keterangan:** Mengambil item dari keranjang user, membuat record order, snaphot item, dan mengosongkan keranjang.
 
 ### List Orders
-- **URL:** `GET http://localhost:5000/api/orders`
+- **URL:** `GET http://localhost:5000/api/orders?page=1&size=10`
 
 ### Order Detail
 - **URL:** `GET http://localhost:5000/api/orders/:id`

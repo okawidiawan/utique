@@ -1,6 +1,6 @@
 import { prisma } from "../application/database.js";
 import { ResponseError } from "../error/response-error.js";
-import { createOrderValidation } from "../validation/order-validation.js";
+import { createOrderValidation, listOrderValidation } from "../validation/order-validation.js";
 
 /**
  * Membuat nomor order unik dengan format UTQ-YYYYMMDD-XXX.
@@ -160,7 +160,7 @@ const create = async (userId, request) => {
           userId,
           addressId: address.id,
           totalPrice,
-          shippingCost: 0, // Flat rate 0 (tahap awal)
+          shippingCost: 0, // Ongkos kirim sementara 0 (gratis) selama tahap awal. TODO: Implementasikan flat rate per zona atau integrasi RajaOngkir di fase lanjutan.
           grandTotal: totalPrice,
           shippingCourier: createRequest.shipping_courier || "Ekspedisi",
           paymentDeadline,
@@ -201,18 +201,40 @@ const create = async (userId, request) => {
 };
 
 /**
- * Mengambil daftar pesanan milik user yang sedang login.
+ * Mengambil daftar pesanan milik user yang sedang login dengan paginasi.
+ * Diurutkan berdasarkan tanggal terbaru.
+ *
  * @param {number} userId - ID user
- * @returns {Promise<Array>} - List order
+ * @param {Object} request - Parameter paginasi { page, size }
+ * @returns {Promise<Object>} - List order dan informasi paginasi
  */
-const list = async (userId) => {
-  return prisma.order.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    include: {
-      items: true,
+const list = async (userId, request) => {
+  // 1. Validasi parameter paginasi
+  const listRequest = listOrderValidation.parse(request);
+  const skip = (listRequest.page - 1) * listRequest.size;
+
+  // 2. Jalankan query data dan count secara paralel untuk efisiensi
+  const [orders, totalItem] = await Promise.all([
+    prisma.order.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      include: { items: true },
+      skip,
+      take: listRequest.size,
+    }),
+    prisma.order.count({
+      where: { userId },
+    }),
+  ]);
+
+  return {
+    data: orders,
+    paging: {
+      page: listRequest.page,
+      total_item: totalItem,
+      total_page: Math.ceil(totalItem / listRequest.size),
     },
-  });
+  };
 };
 
 /**
