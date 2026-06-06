@@ -9,6 +9,13 @@ import { adminRouter } from "../routes/admin-api.js";
 
 export const web = express();
 
+/**
+ * Trust satu level proxy (reverse proxy dari platform hosting seperti Railway/Render).
+ * Diperlukan agar express-rate-limit bisa membaca IP user yang sesungguhnya
+ * dari header X-Forwarded-For, bukan IP proxy.
+ */
+web.set("trust proxy", 1);
+
 // ==========================================
 // Middleware Global
 // ==========================================
@@ -16,10 +23,26 @@ export const web = express();
 // Keamanan HTTP headers
 web.use(helmet());
 
+/**
+ * Membangun daftar origin yang diizinkan untuk CORS.
+ * Membaca dari environment variable CORS_ORIGIN, mendukung multiple
+ * origin yang dipisahkan dengan koma.
+ *
+ * Contoh .env: CORS_ORIGIN=https://utique.com,https://staging.utique.com
+ */
+const allowedOrigins = (process.env.CORS_ORIGIN || "http://localhost:5173").split(",").map((origin) => origin.trim());
+
 // CORS — izinkan frontend mengakses API
 web.use(
   cors({
-    origin: process.env.CORS_ORIGIN || "http://localhost:5173",
+    origin: (requestOrigin, callback) => {
+      // Izinkan request tanpa origin (misalnya Postman, curl)
+      if (!requestOrigin || allowedOrigins.includes(requestOrigin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Akses ditolak oleh CORS policy."));
+      }
+    },
     credentials: true,
   })
 );

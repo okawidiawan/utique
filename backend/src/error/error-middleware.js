@@ -1,11 +1,12 @@
 import { ZodError } from "zod";
 import { ResponseError } from "./response-error.js";
+import { logger } from "../application/logger.js";
 
-// ==========================================
-// Error Middleware — Menangani semua error secara terpusat
-// Mengubah berbagai jenis error menjadi format response JSON yang konsisten.
-// Format error: { error: "pesan error" }
-// ==========================================
+/**
+ * Error Middleware — Menangani semua error secara terpusat
+ * Mengubah berbagai jenis error menjadi format response JSON yang konsisten.
+ * Format error: { error: "pesan error" }
+ */
 export const errorMiddleware = (err, req, res, next) => {
   if (!err) {
     return next();
@@ -26,7 +27,7 @@ export const errorMiddleware = (err, req, res, next) => {
   }
 
   // Error tidak terduga (500 Internal Server Error)
-  console.error("Unexpected Error:", err);
+  logger.error({ err, message: err.message }, "Unhandled error");
   return res.status(500).json({
     error: "Terjadi kesalahan pada server.",
   });

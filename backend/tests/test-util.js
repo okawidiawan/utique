@@ -1,8 +1,19 @@
 import { prisma } from "../src/application/database.js";
 import bcrypt from "bcrypt";
 
+export const TEST_USER_EMAIL = "test@example.com";
+export const TEST_ADMIN_EMAIL = "admin@example.com";
+
 export const removeTestUser = async () => {
-  await prisma.user.deleteMany({});
+  await prisma.user.deleteMany({
+    where: {
+      OR: [
+        { email: { in: [TEST_USER_EMAIL, TEST_ADMIN_EMAIL] } },
+        { email: { contains: "test" } },
+        { email: { endsWith: "@example.com" } },
+      ],
+    },
+  });
 };
 
 export const createTestUser = async () => {
@@ -12,7 +23,7 @@ export const createTestUser = async () => {
   await prisma.user.create({
     data: {
       name: "Test User",
-      email: "test@example.com",
+      email: TEST_USER_EMAIL,
       password: await bcrypt.hash("rahasia123", 10),
       token: "test-token",
       tokenExpiredAt,
@@ -23,7 +34,7 @@ export const createTestUser = async () => {
 export const getTestUser = async () => {
   return prisma.user.findUnique({
     where: {
-      email: "test@example.com",
+      email: TEST_USER_EMAIL,
     },
   });
 };
@@ -35,7 +46,7 @@ export const createTestAdmin = async () => {
   await prisma.user.create({
     data: {
       name: "Test Admin",
-      email: "admin@example.com",
+      email: TEST_ADMIN_EMAIL,
       password: await bcrypt.hash("rahasia123", 10),
       token: "admin-token",
       role: "ADMIN",
@@ -44,10 +55,11 @@ export const createTestAdmin = async () => {
   });
 };
 
+
 export const getTestAdmin = async () => {
   return prisma.user.findUnique({
     where: {
-      email: "admin@example.com",
+      email: TEST_ADMIN_EMAIL,
     },
   });
 };
@@ -198,5 +210,5 @@ export const masterCleanup = async () => {
   await prisma.product.deleteMany({});
   await prisma.flavor.deleteMany({});
   await prisma.size.deleteMany({});
-  await prisma.user.deleteMany({});
+  await removeTestUser();
 };

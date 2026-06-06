@@ -98,11 +98,11 @@ const update = async (productId, request) => {
 };
 
 /**
- * Menghapus Produk beserta seluruh Varian Terkait (Admin Only)
- * Akan gagal jika produk masih memiliki varian yang tercatat
- * di CartItem atau OrderItem aktif.
+ * Menonaktifkan produk (soft delete) agar tidak muncul di katalog publik.
+ * Data produk tetap ada di database untuk menjaga integritas data historis.
+ * Admin bisa mengaktifkan kembali produk dengan PATCH /api/admin/products/:id.
  *
- * @param {Number} productId - ID produk yang akan dihapus
+ * @param {Number} productId - ID produk yang akan dinonaktifkan
  * @returns {String} - Pesan sukses
  */
 const remove = async (productId) => {
@@ -118,34 +118,15 @@ const remove = async (productId) => {
     throw new ResponseError(404, "Produk tidak ditemukan.");
   }
 
-  // 3. Ambil semua ID varian dari produk ini
-  const variants = await prisma.productVariant.findMany({
-    where: { productId: id },
-    select: { id: true },
-  });
-  const variantIds = variants.map((v) => v.id);
-
-  // 4. Cek apakah ada CartItem yang mereferensikan varian dari produk ini
-  const cartItemCount = await prisma.cartItem.count({
-    where: { productVariantId: { in: variantIds } },
-  });
-
-  // 5. Cek apakah ada OrderItem yang mereferensikan varian dari produk ini
-  const orderItemCount = await prisma.orderItem.count({
-    where: { productVariantId: { in: variantIds } },
-  });
-
-  if (cartItemCount > 0 || orderItemCount > 0) {
-    throw new ResponseError(400, "Produk tidak bisa dihapus karena masih terdapat dalam pesanan atau keranjang aktif.");
-  }
-
-  // 6. Hapus relasi (varian) dan produk secara transaksional
+  // 3. Soft delete: nonaktifkan produk dan semua variannya
   await prisma.$transaction([
-    prisma.productVariant.deleteMany({
+    prisma.productVariant.updateMany({
       where: { productId: id },
+      data: { isAvailable: false },
     }),
-    prisma.product.delete({
+    prisma.product.update({
       where: { id },
+      data: { isAvailable: false },
     }),
   ]);
 
@@ -239,10 +220,11 @@ const updateVariant = async (variantId, request) => {
 };
 
 /**
- * Menghapus Varian Produk (Admin Only)
- * Akan gagal jika varian masih ada di CartItem atau OrderItem.
+ * Menonaktifkan varian produk (soft delete).
+ * Data varian tetap ada di database untuk menjaga integritas data historis.
+ * Admin bisa mengaktifkan kembali varian dengan PATCH /api/admin/variants/:id.
  *
- * @param {Number} variantId - ID varian produk yang akan dihapus
+ * @param {Number} variantId - ID varian produk yang akan dinonaktifkan
  * @returns {String} - Pesan sukses
  */
 const removeVariant = async (variantId) => {
@@ -257,23 +239,10 @@ const removeVariant = async (variantId) => {
     throw new ResponseError(404, "Varian tidak ditemukan.");
   }
 
-  // 3. Cek apakah varian masih ada di keranjang belanja
-  const cartItemCount = await prisma.cartItem.count({
-    where: { productVariantId: id },
-  });
-
-  // 4. Cek apakah varian masih ada di pesanan manapun
-  const orderItemCount = await prisma.orderItem.count({
-    where: { productVariantId: id },
-  });
-
-  if (cartItemCount > 0 || orderItemCount > 0) {
-    throw new ResponseError(400, "Varian tidak bisa dihapus karena masih terdapat dalam pesanan atau keranjang aktif.");
-  }
-
-  // 5. Hapus varian dari database
-  await prisma.productVariant.delete({
+  // 3. Soft delete: nonaktifkan varian
+  await prisma.productVariant.update({
     where: { id },
+    data: { isAvailable: false },
   });
 
   return "OK";

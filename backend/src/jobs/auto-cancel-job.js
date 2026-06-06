@@ -1,5 +1,6 @@
 import cron from "node-cron";
 import { prisma } from "../application/database.js";
+import { logger } from "../application/logger.js";
 
 /**
  * Job otomatis untuk membatalkan order yang melewati batas waktu pembayaran.
@@ -46,18 +47,18 @@ const runAutoCancelJob = async () => {
       }),
     ]);
 
-    console.log(`[Auto-Cancel Job] ${expiredOrderIds.length} order dibatalkan karena melewati batas waktu pembayaran.`);
+    logger.info(`[Auto-Cancel Job] ${expiredOrderIds.length} order dibatalkan karena melewati batas waktu pembayaran.`);
   } catch (error) {
-    console.error("[Auto-Cancel Job] Gagal menjalankan job:", error.message);
+    logger.error({ error, message: error.message }, "[Auto-Cancel Job] Gagal menjalankan job");
   }
 };
 
 /**
  * Mendaftarkan dan menjalankan scheduled job auto-cancel.
- * Jadwal: setiap 5 menit ("*\/5 * * * *")
+ * Jadwal: setiap 5 menit ("* / 5 * * * *")
  */
 const startAutoCancelJob = () => {
-  console.log("[Auto-Cancel Job] Job dimulai. Berjalan setiap 5 menit.");
+  logger.info("[Auto-Cancel Job] Job dimulai. Berjalan setiap 5 menit.");
 
   // Jalankan sekali saat startup untuk membersihkan order yang sudah expired
   runAutoCancelJob();
@@ -67,3 +68,4 @@ const startAutoCancelJob = () => {
 };
 
 export { startAutoCancelJob, runAutoCancelJob };
+

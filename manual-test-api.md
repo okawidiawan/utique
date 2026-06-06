@@ -22,10 +22,10 @@ Dokumentasi ini berisi daftar endpoint API Utique yang disusun berdasarkan tahap
 | **2** | **GET** | `/api/admin/sizes` | List semua ukuran | Admin |
 | **2** | **POST** | `/api/admin/products` | Tambah produk baru | Admin |
 | **2** | **PATCH** | `/api/admin/products/:id` | Update produk | Admin |
-| **2** | **DELETE** | `/api/admin/products/:id` | Hapus produk | Admin |
+| **2** | **DELETE** | `/api/admin/products/:id` | Hapus produk (Soft Delete) | Admin |
 | **2** | **POST** | `/api/admin/products/:id/variants` | Tambah varian produk | Admin |    
 | **2** | **PATCH** | `/api/admin/variants/:id` | Update varian | Admin |
-| **2** | **DELETE** | `/api/admin/variants/:id` | Hapus varian | Admin |
+| **2** | **DELETE** | `/api/admin/variants/:id` | Hapus varian (Soft Delete) | Admin |
 | **3** | **GET** | `/api/products` | Cari/List produk | No |
 | **3** | **GET** | `/api/products/:slug` | Detail produk (+ varian) | No |
 | **4** | **POST** | `/api/addresses` | Tambah alamat baru | User |

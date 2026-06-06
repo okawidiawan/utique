@@ -1,6 +1,7 @@
 import express from "express";
 import { authMiddleware } from "../middleware/auth-middleware.js";
 import userController from "../controller/user-controller.js";
+import addressController from "../controller/address-controller.js";
 import cartController from "../controller/cart-controller.js";
 import orderController from "../controller/order-controller.js";
 import paymentController from "../controller/payment-controller.js";
@@ -19,10 +20,10 @@ apiRouter.delete("/api/users/logout", userController.logout);
 // ==========================================
 // Address Routes
 // ==========================================
-apiRouter.post("/api/addresses", userController.createAddress);
-apiRouter.get("/api/addresses", userController.listAddresses);
-apiRouter.patch("/api/addresses/:id", userController.updateAddress);
-apiRouter.delete("/api/addresses/:id", userController.deleteAddress);
+apiRouter.post("/api/addresses", addressController.create);
+apiRouter.get("/api/addresses", addressController.list);
+apiRouter.patch("/api/addresses/:id", addressController.update);
+apiRouter.delete("/api/addresses/:id", addressController.remove);
 
 // ==========================================
 // Cart Routes
