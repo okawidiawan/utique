@@ -122,7 +122,7 @@ describe("Product Admin API", () => {
     });
 
     describe("DELETE /api/admin/products/:id", () => {
-      it("should can delete product as admin", async () => {
+      it("should can delete product as admin (soft delete)", async () => {
         const product = await createTestProduct();
 
         const result = await request(web)
@@ -131,9 +131,12 @@ describe("Product Admin API", () => {
 
         expect(result.status).toBe(200);
         expect(result.body.data).toBe("OK");
+
+        const updatedProduct = await prisma.product.findUnique({ where: { id: product.id } });
+        expect(updatedProduct.isAvailable).toBe(false);
       });
 
-      it("should reject delete product if product not found", async () => {
+      it("should return 404 if product not found during delete", async () => {
         const result = await request(web)
           .delete("/api/admin/products/999")
           .set("Authorization", "Bearer admin-token");
@@ -142,7 +145,7 @@ describe("Product Admin API", () => {
         expect(result.body.error).toBe("Produk tidak ditemukan.");
       });
 
-      it("should reject delete product if it is in cart", async () => {
+      it("should allow soft delete product even if it is in cart", async () => {
         const existingUser = await prisma.user.findUnique({ where: { email: "test@example.com" } });
         const product = await createTestProduct();
         const flavor = await createTestFlavor();
@@ -156,11 +159,14 @@ describe("Product Admin API", () => {
           .delete(`/api/admin/products/${product.id}`)
           .set("Authorization", "Bearer admin-token");
 
-        expect(result.status).toBe(400);
-        expect(result.body.error).toBe("Produk tidak bisa dihapus karena masih terdapat dalam pesanan atau keranjang aktif.");
+        expect(result.status).toBe(200);
+        expect(result.body.data).toBe("OK");
+
+        const updatedProduct = await prisma.product.findUnique({ where: { id: product.id } });
+        expect(updatedProduct.isAvailable).toBe(false);
       });
 
-      it("should reject delete product if it is in order", async () => {
+      it("should allow soft delete product even if it is in order", async () => {
         const existingUser = await prisma.user.findUnique({ where: { email: "test@example.com" } });
         const product = await createTestProduct();
         const flavor = await createTestFlavor();
@@ -174,8 +180,11 @@ describe("Product Admin API", () => {
           .delete(`/api/admin/products/${product.id}`)
           .set("Authorization", "Bearer admin-token");
 
-        expect(result.status).toBe(400);
-        expect(result.body.error).toBe("Produk tidak bisa dihapus karena masih terdapat dalam pesanan atau keranjang aktif.");
+        expect(result.status).toBe(200);
+        expect(result.body.data).toBe("OK");
+
+        const updatedProduct = await prisma.product.findUnique({ where: { id: product.id } });
+        expect(updatedProduct.isAvailable).toBe(false);
       });
     });
   });
@@ -313,7 +322,7 @@ describe("Product Admin API", () => {
     });
 
     describe("DELETE /api/admin/variants/:id", () => {
-      it("should can delete variant as admin", async () => {
+      it("should can delete variant as admin (soft delete)", async () => {
         const variant = await createTestVariant(product.id, flavor.id, size.id);
 
         const result = await request(web)
@@ -322,9 +331,12 @@ describe("Product Admin API", () => {
 
         expect(result.status).toBe(200);
         expect(result.body.data).toBe("OK");
+
+        const updatedVariant = await prisma.productVariant.findUnique({ where: { id: variant.id } });
+        expect(updatedVariant.isAvailable).toBe(false);
       });
 
-      it("should reject delete if variant not found", async () => {
+      it("should return 404 if variant not found during delete", async () => {
         const result = await request(web)
           .delete("/api/admin/variants/999")
           .set("Authorization", "Bearer admin-token");
@@ -333,7 +345,7 @@ describe("Product Admin API", () => {
         expect(result.body.error).toBe("Varian tidak ditemukan.");
       });
 
-      it("should reject delete variant if it is in cart", async () => {
+      it("should allow soft delete variant even if it is in cart", async () => {
         const existingUser = await prisma.user.findUnique({ where: { email: "test@example.com" } });
         const variant = await createTestVariant(product.id, flavor.id, size.id);
         
@@ -344,11 +356,14 @@ describe("Product Admin API", () => {
           .delete(`/api/admin/variants/${variant.id}`)
           .set("Authorization", "Bearer admin-token");
 
-        expect(result.status).toBe(400);
-        expect(result.body.error).toBe("Varian tidak bisa dihapus karena masih terdapat dalam pesanan atau keranjang aktif.");
+        expect(result.status).toBe(200);
+        expect(result.body.data).toBe("OK");
+
+        const updatedVariant = await prisma.productVariant.findUnique({ where: { id: variant.id } });
+        expect(updatedVariant.isAvailable).toBe(false);
       });
 
-      it("should reject delete variant if it is in order", async () => {
+      it("should allow soft delete variant even if it is in order", async () => {
         const existingUser = await prisma.user.findUnique({ where: { email: "test@example.com" } });
         const variant = await createTestVariant(product.id, flavor.id, size.id);
         const address = await createTestAddress(existingUser.id);
@@ -359,8 +374,11 @@ describe("Product Admin API", () => {
           .delete(`/api/admin/variants/${variant.id}`)
           .set("Authorization", "Bearer admin-token");
 
-        expect(result.status).toBe(400);
-        expect(result.body.error).toBe("Varian tidak bisa dihapus karena masih terdapat dalam pesanan atau keranjang aktif.");
+        expect(result.status).toBe(200);
+        expect(result.body.data).toBe("OK");
+
+        const updatedVariant = await prisma.productVariant.findUnique({ where: { id: variant.id } });
+        expect(updatedVariant.isAvailable).toBe(false);
       });
     });
   });

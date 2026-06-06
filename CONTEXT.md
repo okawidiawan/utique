@@ -254,13 +254,15 @@ PENDING → VERIFIED
 2. **Pemisahan Router**: Router dibagi menjadi `publicRouter` dan `apiRouter` (customer) dan `adminRouter` (admin). Masing-masing menggunakan middleware auth yang sesuai.
 3. **Stateless Authentication**: Database menyimpan `token` pada tabel `User`. Validasi dilakukan dengan mencocokkan token di header `Authorization` dengan database. Di sisi Frontend, token disimpan di `sessionStorage` untuk keamanan jangka pendek (migrasi ke `httpOnly` cookie direncanakan untuk fase lanjutan).
 4. **Snapshot Pattern**: `OrderItem` menyimpan snapshot data produk (`product_name`, `flavor_name`, `size_name`, `price`) agar data historis tetap akurat meskipun master data produk berubah.
-5. **Semi-Automatic Estimation**: Estimasi produksi dihitung otomatis berdasarkan `production_time_days` + antrian (`ProductionQueue`), tetapi admin bisa override manual.
-6. **Production Capacity**: Sistem memeriksa tabel `ProductionQueue` untuk memastikan tidak melebihi 10 order per hari. Order yang melebihi kapasitas digeser ke hari berikutnya.
-7. **Auto-Cancel Payment**: Scheduled job (cron) berjalan setiap 5 menit untuk memeriksa order `PENDING_PAYMENT` yang melewati `payment_deadline` dan otomatis mengubah statusnya menjadi `CANCELLED` serta menghapus antrian produksi.
-8. **Review Constraint**: User hanya bisa review setelah order berstatus `COMPLETED`, dan hanya bisa review 1x per produk per order.
-9. **Validation Messaging**: Pesan error Zod dikustomisasi menggunakan Bahasa Indonesia untuk kemudahan integrasi dengan Frontend.
-10. **Flat Rate Shipping**: Ongkir menggunakan flat rate per zona untuk tahap awal. Integrasi API ongkir (RajaOngkir) direncanakan untuk fase lanjutan.
-11. **Prisma 7 Driver Adapter**: Menggunakan `@prisma/adapter-pg` dan `pg` pool untuk koneksi database guna mendukung fleksibilitas konfigurasi di Prisma 7.
+5. **Soft Delete Pattern**: Operasi penghapusan produk dan varian menggunakan soft delete dengan mengubah field `isAvailable` menjadi `false`. Hal ini dilakukan untuk menjaga integritas data historis yang direferensikan oleh `OrderItem`.
+6. **Semi-Automatic Estimation**: Estimasi produksi dihitung otomatis berdasarkan `production_time_days` + antrian (`ProductionQueue`), tetapi admin bisa override manual.
+7. **Production Capacity**: Sistem memeriksa tabel `ProductionQueue` untuk memastikan tidak melebihi 10 order per hari. Order yang melebihi kapasitas digeser ke hari berikutnya.
+8. **Auto-Cancel Payment**: Scheduled job (cron) berjalan setiap 5 menit untuk memeriksa order `PENDING_PAYMENT` yang melewati `payment_deadline` dan otomatis mengubah statusnya menjadi `CANCELLED` serta menghapus antrian produksi.
+9. **Review Constraint**: User hanya bisa review setelah order berstatus `COMPLETED`, dan hanya bisa review 1x per produk per order.
+10. **Validation Messaging**: Pesan error Zod dikustomisasi menggunakan Bahasa Indonesia untuk kemudahan integrasi dengan Frontend.
+11. **Flat Rate Shipping**: Ongkir menggunakan flat rate per zona untuk tahap awal. Integrasi API ongkir (RajaOngkir) direncanakan untuk fase lanjutan.
+12. **Prisma 7 Driver Adapter**: Menggunakan `@prisma/adapter-pg` dan `pg` pool untuk koneksi database guna mendukung fleksibilitas konfigurasi di Prisma 7.
+13. **Master Data Immutability**: Flavor dan Size adalah master data yang bersifat immutable — tidak bisa diedit atau dihapus setelah dibuat. Ini untuk menjaga konsistensi data historis di `ProductVariant` dan `OrderItem`. Untuk "menonaktifkan" Flavor atau Size, gunakan soft delete dengan field `isAvailable` (implementasi di fase lanjutan).
 
 ---
 
