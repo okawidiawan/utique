@@ -11,7 +11,7 @@ export default function AdminLayout() {
 
   // Tampilkan loading state saat auth check sedang berlangsung
   if (isLoading) {
-    return <div className="loading-container">Loading...</div>;
+    return <div className="flex justify-center items-center h-screen">Loading...</div>;
   }
 
   // Redirect ke login jika user belum login
@@ -25,24 +25,24 @@ export default function AdminLayout() {
   }
 
   return (
-    <div className="admin-layout">
+    <div className="flex min-h-screen bg-bg">
       {/* Sidebar navigasi admin */}
-      <aside className="admin-sidebar">
-        <div className="admin-logo">
-          <Link to="/admin">🍪 Utique Admin</Link>
+      <aside className="w-64 bg-bg-dark text-white p-6 flex flex-col fixed inset-y-0 left-0">
+        <div className="mb-12">
+          <Link to="/admin" className="text-xl font-bold text-accent">🍪 Utique Admin</Link>
         </div>
-        <nav className="admin-nav">
-          <Link to="/admin">Dashboard</Link>
-          <Link to="/admin/products">Produk</Link>
-          <Link to="/admin/orders">Pesanan</Link>
+        <nav className="flex flex-col gap-2">
+          <Link to="/admin" className="text-white px-4 py-2 rounded-md transition-colors hover:bg-white/10 hover:text-accent">Dashboard</Link>
+          <Link to="/admin/products" className="text-white px-4 py-2 rounded-md transition-colors hover:bg-white/10 hover:text-accent">Produk</Link>
+          <Link to="/admin/orders" className="text-white px-4 py-2 rounded-md transition-colors hover:bg-white/10 hover:text-accent">Pesanan</Link>
         </nav>
-        <div className="admin-footer">
-          <Link to="/">← Kembali ke Toko</Link>
+        <div className="mt-auto">
+          <Link to="/" className="text-text-light text-sm hover:text-white transition-colors">← Kembali ke Toko</Link>
         </div>
       </aside>
 
       {/* Konten halaman admin */}
-      <main className="admin-content">
+      <main className="flex-1 ml-64 p-8">
         <Outlet />
       </main>
     </div>

@@ -39,7 +39,7 @@ Dokumen ini berfungsi sebagai ringkasan teknis dan arsitektur proyek Utique untu
 - **Routing**: React Router (Single Page App mode)
 - **State Management**: Zustand
 - **HTTP Client**: Axios with interceptors
-- **Styling**: Vanilla CSS
+- **Styling**: Tailwind CSS v4
 - **Module System**: ES Modules
 
 ---
