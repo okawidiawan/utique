@@ -9,6 +9,7 @@ import LoginPage from "../pages/auth/LoginPage";
 import RegisterPage from "../pages/auth/RegisterPage";
 
 // Customer Pages
+import LandingPage from "../pages/customer/LandingPage";
 import HomePage from "../pages/customer/HomePage";
 import ProductsPage from "../pages/customer/ProductsPage";
 import ProductDetailPage from "../pages/customer/ProductDetailPage";
@@ -41,7 +42,8 @@ export default function AppRouter() {
 
         {/* Customer Routes (MainLayout) */}
         <Route element={<MainLayout />}>
-          <Route path="/" element={<HomePage />} />
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/home" element={<HomePage />} />
           <Route path="/products" element={<ProductsPage />} />
           <Route path="/products/:slug" element={<ProductDetailPage />} />
           <Route path="/cart" element={<CartPage />} />
